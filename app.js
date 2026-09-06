@@ -3555,6 +3555,26 @@ function fmtQtdCard(q) {
     return Number.isInteger(n) ? String(n) : String(n).replace('.', ',');
 }
 
+// Desenha a imagem da santa no canto inferior direito do card (se disponível), mantendo proporção
+function desenharSantaCard(doc, pageW, pageH) {
+    const img = document.getElementById('imgSantaCard');
+    if (!img || !img.complete || !img.naturalWidth) return;
+    try {
+        const alturaDesejada = 78; // mm
+        const prop = img.naturalWidth / img.naturalHeight;
+        const larg = alturaDesejada * prop;
+        const x = pageW - larg - 12;   // encostada à direita, dentro da moldura
+        const y = pageH - alturaDesejada - 26; // acima do rodapé
+        if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
+            doc.setGState(new doc.GState({ opacity: 0.92 }));
+        }
+        doc.addImage(img, 'PNG', x, y, larg, alturaDesejada, undefined, 'FAST');
+        if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
+            doc.setGState(new doc.GState({ opacity: 1 }));
+        }
+    } catch (e) { /* imagem indisponível — segue sem ela */ }
+}
+
 // Exporta um CARD (estilo cartaz) por barraca, no visual da Festa da Padroeira
 function exportarNecessidadesCards() {
     if (!dados.necessidades || dados.necessidades.length === 0) { alert('Nenhum item cadastrado'); return; }
@@ -3654,7 +3674,10 @@ function exportarNecessidadesCards() {
         });
         const alturaLinha = 8.6;
         const totalLinhasVisuais = linhasWrap.reduce((s, p) => s + p.length, 0);
-        const boxH = Math.min(pageH - boxTop - 32, 20 + totalLinhasVisuais * alturaLinha);
+        // Reserva a faixa inferior direita para a imagem da santa (se ela existir)
+        const temSanta = (() => { const im = document.getElementById('imgSantaCard'); return im && im.complete && im.naturalWidth; })();
+        const limiteInferior = temSanta ? (pageH - 96) : (pageH - 32);
+        const boxH = Math.min(limiteInferior - boxTop, 20 + totalLinhasVisuais * alturaLinha);
 
         // Sombra sutil (só se o jsPDF suportar transparência)
         if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
@@ -3682,6 +3705,9 @@ function exportarNecessidadesCards() {
                 ty += alturaLinha;
             });
         });
+
+        // Imagem da santa (canto inferior direito)
+        desenharSantaCard(doc, pageW, pageH);
 
         // ===== RODAPÉ =====
         doc.setFont('helvetica', 'bold');
