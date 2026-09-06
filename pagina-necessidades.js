@@ -259,26 +259,6 @@ function fmtQtdCard(q) {
     return Number.isInteger(n) ? String(n) : String(n).replace('.', ',');
 }
 
-// Desenha a imagem da santa no canto inferior direito do card (se disponível), mantendo proporção
-function desenharSantaCard(doc, pageW, pageH) {
-    const img = document.getElementById('imgSantaCard');
-    if (!img || !img.complete || !img.naturalWidth) return;
-    try {
-        const alturaDesejada = 78;
-        const prop = img.naturalWidth / img.naturalHeight;
-        const larg = alturaDesejada * prop;
-        const x = pageW - larg - 12;
-        const y = pageH - alturaDesejada - 26;
-        if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
-            doc.setGState(new doc.GState({ opacity: 0.92 }));
-        }
-        doc.addImage(img, 'PNG', x, y, larg, alturaDesejada, undefined, 'FAST');
-        if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
-            doc.setGState(new doc.GState({ opacity: 1 }));
-        }
-    } catch (e) { /* imagem indisponível — segue sem ela */ }
-}
-
 // Exporta um CARD (estilo cartaz) por barraca, no visual da Festa da Padroeira
 function exportarNecessidadesCards() {
     if (!dados.necessidades || dados.necessidades.length === 0) { alert('Nenhum item cadastrado'); return; }
@@ -364,26 +344,9 @@ function exportarNecessidadesCards() {
 
         // Caixa creme
         const boxX = 18, boxTop = ly + 12, boxW = pageW - 36;
-        const linhas = itens.map(n => {
-            const q = fmtQtdCard(n.qtd);
-            const u = unidadeExtenso(n.unidade, n.qtd);
-            const unidadeTxt = u ? `${u} ` : '';
-            return `${q} ${unidadeTxt}- ${n.item}`;
-        });
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        const larguraTexto = boxW - 24;
-        let linhasWrap = [];
-        linhas.forEach((l, i) => {
-            const terminador = i === linhas.length - 1 ? '.' : ';';
-            linhasWrap.push(doc.splitTextToSize(l + terminador, larguraTexto));
-        });
-        const alturaLinha = 8.6;
-        const totalLinhasVisuais = linhasWrap.reduce((s, p) => s + p.length, 0);
-        const temSanta = (() => { const im = document.getElementById('imgSantaCard'); return im && im.complete && im.naturalWidth; })();
-        const limiteInferior = temSanta ? (pageH - 96) : (pageH - 32);
-        const boxH = Math.min(limiteInferior - boxTop, 20 + totalLinhasVisuais * alturaLinha);
+        const boxBottomMax = pageH - 30;
+        const boxH = boxBottomMax - boxTop;
+        const padX = 12, padTop = 14, padBottom = 8;
 
         if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
             doc.setFillColor(0, 0, 0);
@@ -397,19 +360,64 @@ function exportarNecessidadesCards() {
         doc.setLineWidth(0.8);
         doc.roundedRect(boxX, boxTop, boxW, boxH, 7, 7, 'S');
 
+        const linhas = itens.map((n, i) => {
+            const q = fmtQtdCard(n.qtd);
+            const u = unidadeExtenso(n.unidade, n.qtd);
+            const unidadeTxt = u ? `${u} ` : '';
+            const terminador = i === itens.length - 1 ? '.' : ';';
+            return `${q} ${unidadeTxt}- ${n.item}${terminador}`;
+        });
+        const alturaUtil = boxH - padTop - padBottom;
+
+        function planejar(colunas, fonte, entrelinha) {
+            const larguraCol = (boxW - padX * 2 - (colunas === 2 ? 10 : 0)) / colunas;
+            doc.setFontSize(fonte);
+            const blocos = linhas.map(l => doc.splitTextToSize(l, larguraCol));
+            const totalVis = blocos.reduce((s, b) => s + b.length, 0);
+            const porColuna = Math.ceil(totalVis / colunas);
+            const alturaNecessaria = porColuna * entrelinha;
+            return { larguraCol, blocos, totalVis, cabe: alturaNecessaria <= alturaUtil };
+        }
+
+        const tentativas = [
+            { colunas: 1, fonte: 15, entrelinha: 9.2 },
+            { colunas: 1, fonte: 14, entrelinha: 8.6 },
+            { colunas: 1, fonte: 13, entrelinha: 8.0 },
+            { colunas: 1, fonte: 12, entrelinha: 7.2 },
+            { colunas: 2, fonte: 13, entrelinha: 7.6 },
+            { colunas: 2, fonte: 12, entrelinha: 7.0 },
+            { colunas: 2, fonte: 11, entrelinha: 6.4 },
+            { colunas: 2, fonte: 10, entrelinha: 5.9 },
+            { colunas: 2, fonte: 9,  entrelinha: 5.4 }
+        ];
+        let plano = null, cfg = null;
+        for (const t of tentativas) {
+            const p = planejar(t.colunas, t.fonte, t.entrelinha);
+            if (p.cabe) { plano = p; cfg = t; break; }
+        }
+        if (!plano) { cfg = tentativas[tentativas.length - 1]; plano = planejar(cfg.colunas, cfg.fonte, cfg.entrelinha); }
+
         doc.setTextColor(...TEXTO_ESCURO);
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        let ty = boxTop + 14;
-        linhasWrap.forEach(partes => {
-            partes.forEach(p => {
-                doc.text(p, boxX + 12, ty);
-                ty += alturaLinha;
-            });
-        });
+        doc.setFontSize(cfg.fonte);
 
-        // Imagem da santa (canto inferior direito)
-        desenharSantaCard(doc, pageW, pageH);
+        const linhasVisuais = [];
+        plano.blocos.forEach(b => b.forEach(l => linhasVisuais.push(l)));
+        const porColuna = Math.ceil(linhasVisuais.length / cfg.colunas);
+
+        if (cfg.colunas === 1) {
+            let ty = boxTop + padTop;
+            linhasVisuais.forEach(l => { doc.text(l, boxX + padX, ty); ty += cfg.entrelinha; });
+        } else {
+            const col1 = linhasVisuais.slice(0, porColuna);
+            const col2 = linhasVisuais.slice(porColuna);
+            const x1 = boxX + padX;
+            const x2 = boxX + padX + plano.larguraCol + 10;
+            let ty1 = boxTop + padTop;
+            col1.forEach(l => { doc.text(l, x1, ty1); ty1 += cfg.entrelinha; });
+            let ty2 = boxTop + padTop;
+            col2.forEach(l => { doc.text(l, x2, ty2); ty2 += cfg.entrelinha; });
+        }
 
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...DOURADO);
