@@ -3564,11 +3564,20 @@ function exportarNecessidadesCards() {
     const pageH = doc.internal.pageSize.getHeight();  // ~297
 
     // Paleta Festa da Padroeira (cartaz)
-    const AZUL_ESCURO = [13, 42, 92];
-    const AZUL_MEDIO = [30, 90, 168];
-    const DOURADO = [212, 165, 58];
-    const CREME = [247, 240, 222];
-    const TEXTO_ESCURO = [20, 40, 80];
+    const AZUL_TOPO = [26, 78, 150];     // faixa superior mais clara
+    const AZUL_ESCURO = [10, 30, 66];    // fundo principal (marinho)
+    const AZUL_MAIS_ESCURO = [7, 22, 50];// base do "gradiente"
+    const DOURADO = [214, 170, 74];
+    const CREME = [248, 241, 220];
+    const TEXTO_ESCURO = [22, 44, 84];
+
+    // Remove QUALQUER emoji/símbolo do início e do meio do nome (jsPDF não desenha emoji)
+    function limparNome(txt) {
+        return String(txt || '')
+            .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\uFE0F\u200D]/gu, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
 
     // Agrupar por barraca
     const agrupado = {};
@@ -3584,29 +3593,50 @@ function exportarNecessidadesCards() {
 
     keys.forEach((key, idx) => {
         if (idx > 0) doc.addPage();
-        const nome = (key === 'geral' ? 'Geral' : (NOMES_BARRACAS[key]||key)).replace(/^.{2}\s?/,'').toUpperCase();
-        const itens = agrupado[key];
+        const nome = limparNome(key === 'geral' ? 'Geral' : (NOMES_BARRACAS[key]||key)).toUpperCase();
+        const itens = itens_ordenar(agrupado[key]);
 
-        // Fundo azul escuro (página inteira)
-        doc.setFillColor(...AZUL_ESCURO);
-        doc.rect(0, 0, pageW, pageH, 'F');
-        // Faixa superior azul médio
-        doc.setFillColor(...AZUL_MEDIO);
-        doc.rect(0, 0, pageW, 62, 'F');
+        // ===== FUNDO com "gradiente" (faixas do topo claro ao fundo escuro) =====
+        const faixas = 60;
+        for (let i = 0; i < faixas; i++) {
+            const t = i / (faixas - 1);
+            const r = Math.round(AZUL_TOPO[0] + (AZUL_MAIS_ESCURO[0] - AZUL_TOPO[0]) * t);
+            const g = Math.round(AZUL_TOPO[1] + (AZUL_MAIS_ESCURO[1] - AZUL_TOPO[1]) * t);
+            const b = Math.round(AZUL_TOPO[2] + (AZUL_MAIS_ESCURO[2] - AZUL_TOPO[2]) * t);
+            doc.setFillColor(r, g, b);
+            doc.rect(0, (pageH / faixas) * i, pageW, pageH / faixas + 0.5, 'F');
+        }
 
-        // Título
+        // ===== MOLDURA DOURADA externa da página =====
+        doc.setDrawColor(...DOURADO);
+        doc.setLineWidth(1.2);
+        doc.rect(8, 8, pageW - 16, pageH - 16);
+        doc.setLineWidth(0.4);
+        doc.rect(10.5, 10.5, pageW - 21, pageH - 21);
+
+        // ===== CABEÇALHO =====
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...DOURADO);
-        doc.setFontSize(20);
-        doc.text('MATERIAIS E INSUMOS', pageW / 2, 26, { align: 'center' });
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(30);
-        // quebra nome grande se precisar
-        const nomeLinhas = doc.splitTextToSize(nome, pageW - 30);
-        doc.text(nomeLinhas, pageW / 2, 44, { align: 'center' });
+        doc.setFontSize(19);
+        doc.text('MATERIAIS E INSUMOS', pageW / 2, 30, { align: 'center' });
 
-        // Caixa creme com os itens
-        const boxX = 18, boxTop = 78, boxW = pageW - 36;
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(32);
+        const nomeLinhas = doc.splitTextToSize(nome, pageW - 40);
+        doc.text(nomeLinhas, pageW / 2, 46, { align: 'center' });
+        let headBottom = 46 + (nomeLinhas.length - 1) * 12;
+
+        // Linha dourada decorativa com losango central
+        const ly = headBottom + 8;
+        doc.setDrawColor(...DOURADO);
+        doc.setLineWidth(0.6);
+        doc.line(pageW / 2 - 45, ly, pageW / 2 - 6, ly);
+        doc.line(pageW / 2 + 6, ly, pageW / 2 + 45, ly);
+        doc.setFillColor(...DOURADO);
+        doc.rect(pageW / 2 - 2.2, ly - 2.2, 4.4, 4.4, 'F'); // losango (quadrado girado visual)
+
+        // ===== CAIXA CREME com moldura dourada =====
+        const boxX = 18, boxTop = ly + 12, boxW = pageW - 36;
         const linhas = itens.map(n => {
             const q = fmtQtdCard(n.qtd);
             const u = unidadeExtenso(n.unidade, n.qtd);
@@ -3614,47 +3644,69 @@ function exportarNecessidadesCards() {
             return `${q} ${unidadeTxt}- ${n.item}`;
         });
 
-        // Calcular altura necessária (texto grande, com wrap)
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(15);
-        const larguraTexto = boxW - 20;
+        doc.setFontSize(14);
+        const larguraTexto = boxW - 24;
         let linhasWrap = [];
         linhas.forEach((l, i) => {
             const terminador = i === linhas.length - 1 ? '.' : ';';
-            const partes = doc.splitTextToSize(l + terminador, larguraTexto);
-            linhasWrap.push(partes);
+            linhasWrap.push(doc.splitTextToSize(l + terminador, larguraTexto));
         });
-        const alturaLinha = 9;
+        const alturaLinha = 8.6;
         const totalLinhasVisuais = linhasWrap.reduce((s, p) => s + p.length, 0);
-        const boxH = Math.min(pageH - boxTop - 30, 24 + totalLinhasVisuais * alturaLinha);
+        const boxH = Math.min(pageH - boxTop - 32, 20 + totalLinhasVisuais * alturaLinha);
 
-        // Fundo da caixa
+        // Sombra sutil (só se o jsPDF suportar transparência)
+        if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
+            doc.setFillColor(0, 0, 0);
+            doc.setGState(new doc.GState({ opacity: 0.18 }));
+            doc.roundedRect(boxX + 1.5, boxTop + 1.8, boxW, boxH, 7, 7, 'F');
+            doc.setGState(new doc.GState({ opacity: 1 }));
+        }
+        // Caixa creme
         doc.setFillColor(...CREME);
-        doc.roundedRect(boxX, boxTop, boxW, boxH, 6, 6, 'F');
+        doc.roundedRect(boxX, boxTop, boxW, boxH, 7, 7, 'F');
+        // Borda dourada da caixa
+        doc.setDrawColor(...DOURADO);
+        doc.setLineWidth(0.8);
+        doc.roundedRect(boxX, boxTop, boxW, boxH, 7, 7, 'S');
 
-        // Escrever itens
+        // Itens
         doc.setTextColor(...TEXTO_ESCURO);
-        let ty = boxTop + 16;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        let ty = boxTop + 14;
         linhasWrap.forEach(partes => {
             partes.forEach(p => {
-                doc.text(p, boxX + 10, ty);
+                doc.text(p, boxX + 12, ty);
                 ty += alturaLinha;
             });
         });
 
-        // Rodapé
+        // ===== RODAPÉ =====
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...DOURADO);
         doc.setFontSize(13);
-        doc.text('FESTA DA PADROEIRA 2026', pageW / 2, pageH - 16, { align: 'center' });
+        doc.text('FESTA DA PADROEIRA 2026', pageW / 2, pageH - 20, { align: 'center' });
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(220, 225, 235);
+        doc.setTextColor(225, 230, 240);
         doc.setFontSize(9);
-        doc.text('Basílica Menor Nossa Senhora da Conceição Aparecida', pageW / 2, pageH - 9, { align: 'center' });
+        doc.text('Basílica Menor Nossa Senhora da Conceição Aparecida', pageW / 2, pageH - 14, { align: 'center' });
     });
 
     doc.save('materiais_insumos_padroeira.pdf');
     if (typeof mostrarToast === 'function') mostrarToast('📄 Cards de materiais exportados!');
+}
+
+// Ordena itens do card: "farofa" e "descartável" por último (agrupados)
+function itens_ordenar(lista) {
+    const peso = n => {
+        const t = ((n.obs||'') + ' ' + (n.item||'')).toLowerCase();
+        if (t.includes('descart')) return 2;
+        if (t.includes('farofa')) return 1;
+        return 0;
+    };
+    return [...lista].sort((a, b) => peso(a) - peso(b) || (a.item||'').localeCompare(b.item||''));
 }
 
 // ===== VENDA DE CAMISETAS =====
