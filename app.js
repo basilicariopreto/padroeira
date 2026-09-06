@@ -3306,6 +3306,11 @@ function adicionarNecessidade() {
     document.getElementById('necessidadeQtd').value = '1';
     document.getElementById('necessidadeObs').value = '';
     renderizarNecessidades();
+    // Mantém a mesma barraca e volta o foco pro item (agiliza lançar vários seguidos)
+    const selBarr = document.getElementById('necessidadeBarraca');
+    if (selBarr) selBarr.value = barraca;
+    const inputItem = document.getElementById('necessidadeItem');
+    if (inputItem) inputItem.focus();
     registrarAcao(`Necessidade: ${item} → ${barraca}`);
 }
 
@@ -3346,13 +3351,15 @@ function renderizarNecessidades() {
     const container = document.getElementById('listaNecessidades');
     if (!container) return;
 
-    // Atualizar select de barracas
+    // Atualizar select de barracas (preservando a barraca selecionada)
     const select = document.getElementById('necessidadeBarraca');
     if (select) {
+        const valorAtual = select.value;
         const opts = '<option value="geral">Geral (evento todo)</option>' + BARRACAS.map(b =>
             `<option value="${b}">${(NOMES_BARRACAS[b]||b).replace(/^.{2}\s?/,'')}</option>`
         ).join('');
         select.innerHTML = opts;
+        if (valorAtual) select.value = valorAtual;
     }
 
     // Agrupar por barraca

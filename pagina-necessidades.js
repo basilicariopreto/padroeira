@@ -14,6 +14,11 @@ function adicionarNecessidade() {
     document.getElementById('necessidadeQtd').value = '1';
     document.getElementById('necessidadeObs').value = '';
     renderizarPagina();
+    // Mantém a mesma barraca e volta o foco pro item (agiliza lançar vários seguidos)
+    const selBarr = document.getElementById('necessidadeBarraca');
+    if (selBarr) selBarr.value = barraca;
+    const inputItem = document.getElementById('necessidadeItem');
+    if (inputItem) inputItem.focus();
     mostrarToast(`✅ Item adicionado!`);
 }
 
