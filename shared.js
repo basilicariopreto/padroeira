@@ -179,12 +179,16 @@ function adicionarItem(campo, item) {
 
 function removerItem(campo, id) {
     if (!dados[campo]) dados[campo] = [];
+    // Guarda cópia na lixeira ANTES de remover (segurança contra perda acidental)
+    const itemRemovido = dados[campo].find(x => String(x.id) === String(id));
+    if (itemRemovido && typeof fbEnviarLixeira === 'function') fbEnviarLixeira(campo, itemRemovido);
     // Compara como string para funcionar com id número ou string (Firebase)
     dados[campo] = dados[campo].filter(x => String(x.id) !== String(id));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
     indicarSalvando();
-    // Regrava o campo inteiro chaveado por id (elimina chaves de posição antigas)
-    const p = (typeof fbGravarCampo === 'function') ? fbGravarCampo(campo, dados[campo]) : Promise.resolve();
+    // Remove SÓ o item por id (não reescreve o campo inteiro — evita apagar itens de outros dispositivos)
+    const p = (typeof fbRemoverItem === 'function') ? fbRemoverItem(campo, id)
+        : (typeof fbGravarCampo === 'function') ? fbGravarCampo(campo, dados[campo]) : Promise.resolve();
     if (p && p.then) p.then(indicarSalvo);
     else indicarSalvo();
 }
@@ -197,8 +201,9 @@ function atualizarItem(campo, id, novosCampos) {
     Object.assign(item, novosCampos);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
     indicarSalvando();
-    // Regrava o campo inteiro chaveado por id (corrige itens salvos por posição e evita duplicata)
-    const p = (typeof fbGravarCampo === 'function') ? fbGravarCampo(campo, dados[campo]) : Promise.resolve();
+    // Grava SÓ o item alterado por id (não reescreve o campo inteiro — evita apagar itens de outros dispositivos)
+    const p = (typeof fbAtualizarItem === 'function') ? fbAtualizarItem(campo, id, item)
+        : (typeof fbGravarCampo === 'function') ? fbGravarCampo(campo, dados[campo]) : Promise.resolve();
     if (p && p.then) p.then(indicarSalvo);
     else indicarSalvo();
 }

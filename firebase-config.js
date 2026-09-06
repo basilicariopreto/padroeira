@@ -27,12 +27,16 @@ const dbRef = db.ref('padroeira');
 // fbAdicionarItem/fbGravarCampo, para não desfazer o formato chaveado por id (que evita
 // duplicação e perda). Aqui gravamos só vendas de barraca, config e meta.
 const CAMPOS_ITEM_A_ITEM_FB = ['patrocinadores', 'despesas', 'doacoesEntrada', 'doadores', 'necessidades', 'caixas', 'camisetas'];
+// Nós que NUNCA devem ser tocados por um update de dados (lixeira e edição anterior)
+const CAMPOS_PROTEGIDOS_FB = ['lixeira', 'edicao_anterior'];
 
 function salvarFirebase(dados) {
     // Converter para JSON e voltar para limpar undefined/funções
     const limpo = JSON.parse(JSON.stringify(dados));
     // Remove os campos item-a-item para não sobrescrevê-los como array de posição
     CAMPOS_ITEM_A_ITEM_FB.forEach(campo => { delete limpo[campo]; });
+    // Remove nós protegidos que não fazem parte do objeto de dados operacional
+    CAMPOS_PROTEGIDOS_FB.forEach(campo => { delete limpo[campo]; });
     dbRef.update(limpo).catch(err => {
         console.error('Erro ao salvar no Firebase:', err);
         // Avisa o usuário quando a gravação falha (ex: regras expiradas / sem permissão)
@@ -99,4 +103,44 @@ function fbAtualizarItem(campo, id, item) {
         console.error('Erro ao atualizar item no Firebase:', err);
         if (typeof mostrarToast === 'function') mostrarToast('⚠️ ERRO: alteração NÃO salva no servidor.', 'error');
     });
+}
+
+// ===== LIXEIRA (segurança contra remoção acidental) =====
+// Guarda uma cópia de todo item removido no nó 'lixeira', com data e origem,
+// para poder restaurar depois. Mantém no máximo os 200 registros mais recentes.
+function fbEnviarLixeira(campo, item) {
+    if (!item || item.id == null) return Promise.resolve();
+    const registro = {
+        campo,
+        item: JSON.parse(JSON.stringify(item)),
+        removidoEm: new Date().toISOString(),
+        chave: Date.now() + '_' + item.id
+    };
+    return dbRef.child('lixeira').child(registro.chave).set(registro).catch(err => {
+        console.error('Erro ao gravar na lixeira:', err);
+    });
+}
+
+// Retorna a lista da lixeira (array), mais recentes primeiro
+function fbListarLixeira() {
+    return dbRef.child('lixeira').once('value').then(snap => {
+        const val = snap.val() || {};
+        return Object.values(val).sort((a, b) => (b.removidoEm || '').localeCompare(a.removidoEm || ''));
+    }).catch(() => []);
+}
+
+// Restaura um item da lixeira de volta ao seu campo original
+function fbRestaurarLixeira(chave) {
+    return dbRef.child('lixeira').child(chave).once('value').then(snap => {
+        const reg = snap.val();
+        if (!reg || !reg.item || reg.item.id == null) return false;
+        return dbRef.child(reg.campo).child(String(reg.item.id)).set(reg.item).then(() => {
+            return dbRef.child('lixeira').child(chave).remove().then(() => true);
+        });
+    }).catch(err => { console.error('Erro ao restaurar da lixeira:', err); return false; });
+}
+
+// Apaga um registro da lixeira definitivamente
+function fbExcluirLixeira(chave) {
+    return dbRef.child('lixeira').child(chave).remove().catch(err => console.error('Erro ao excluir da lixeira:', err));
 }

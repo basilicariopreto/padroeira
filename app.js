@@ -219,9 +219,14 @@ function adicionarItem(campo, item) {
 
 function removerItem(campo, id) {
     if (!dados[campo]) dados[campo] = [];
+    // Guarda cópia na lixeira ANTES de remover (segurança contra perda acidental)
+    const itemRemovido = dados[campo].find(x => String(x.id) === String(id));
+    if (itemRemovido && typeof fbEnviarLixeira === 'function') fbEnviarLixeira(campo, itemRemovido);
     dados[campo] = dados[campo].filter(x => String(x.id) !== String(id));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
-    if (typeof fbGravarCampo === 'function') fbGravarCampo(campo, dados[campo]);
+    // Remove SÓ o item por id (não reescreve o campo inteiro — evita apagar itens de outros dispositivos)
+    if (typeof fbRemoverItem === 'function') fbRemoverItem(campo, id);
+    else if (typeof fbGravarCampo === 'function') fbGravarCampo(campo, dados[campo]);
     else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
 }
 
@@ -231,7 +236,9 @@ function atualizarItem(campo, id, novosCampos) {
     if (!item) return;
     Object.assign(item, novosCampos);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
-    if (typeof fbGravarCampo === 'function') fbGravarCampo(campo, dados[campo]);
+    // Grava SÓ o item alterado por id (não reescreve o campo inteiro — evita apagar itens de outros dispositivos)
+    if (typeof fbAtualizarItem === 'function') fbAtualizarItem(campo, id, item);
+    else if (typeof fbGravarCampo === 'function') fbGravarCampo(campo, dados[campo]);
     else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
 }
 
@@ -2367,6 +2374,68 @@ function limparTodosDados() {
     renderizarTudo();
     renderizarHistorico();
     alert('Dados limpos com sucesso! Tudo zerado para começar do zero.');
+}
+
+// ===== LIXEIRA (recuperar itens apagados) =====
+const LIXEIRA_LABEL = {
+    camisetas: '👕 Camiseta', patrocinadores: '🤝 Patrocinador', despesas: '🧾 Despesa',
+    doacoesEntrada: '💰 Doação em dinheiro', doadores: '🎁 Bingo/Leilão', necessidades: '📋 Necessidade', caixas: '🧑‍💼 Caixa'
+};
+
+function descreverItemLixeira(campo, item) {
+    if (!item) return '(item)';
+    if (campo === 'camisetas') return `${item.nome||'-'} — ${item.modelagem||''} ${item.tamanho||''} (${item.tipo||''})`;
+    if (campo === 'patrocinadores') return `${item.nome||'-'} — ${R$(item.valor||0)}`;
+    if (campo === 'despesas') return `${item.desc||'-'} — ${R$(item.valor||0)}`;
+    if (campo === 'doacoesEntrada') return `${item.nome||item.doador||'-'} — ${R$(item.valor||0)}`;
+    if (campo === 'doadores') return `${item.nome||'-'} — ${item.item||''}`;
+    if (campo === 'necessidades') return `${item.item||'-'} (${item.qtd||0} ${item.unidade||''})`;
+    if (campo === 'caixas') return `${item.nome||'-'}`;
+    return item.nome || item.desc || item.item || '(item)';
+}
+
+function abrirLixeira() {
+    const el = document.getElementById('lixeiraLista');
+    if (!el) return;
+    el.innerHTML = '<p style="opacity:0.6">Carregando...</p>';
+    if (typeof fbListarLixeira !== 'function') { el.innerHTML = '<p style="opacity:0.6">Lixeira indisponível.</p>'; return; }
+    fbListarLixeira().then(lista => {
+        if (!lista || lista.length === 0) { el.innerHTML = '<p style="opacity:0.6">Nenhum item apagado. 🎉</p>'; return; }
+        let html = '<div class="tabela-box"><table><thead><tr><th>Tipo</th><th>Item</th><th>Apagado em</th><th></th></tr></thead><tbody>';
+        lista.forEach(reg => {
+            const quando = reg.removidoEm ? new Date(reg.removidoEm).toLocaleString('pt-BR') : '-';
+            html += `<tr>
+                <td>${LIXEIRA_LABEL[reg.campo] || reg.campo}</td>
+                <td>${descreverItemLixeira(reg.campo, reg.item)}</td>
+                <td style="font-size:0.8rem;opacity:0.8">${quando}</td>
+                <td style="white-space:nowrap">
+                    <button class="btn-venda" style="padding:3px 8px" onclick="restaurarLixeira('${reg.chave}')" title="Restaurar">↩️ Restaurar</button>
+                    <button class="btn-delete" onclick="excluirLixeira('${reg.chave}')" title="Apagar de vez">X</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        el.innerHTML = html;
+    });
+}
+
+function restaurarLixeira(chave) {
+    if (typeof fbRestaurarLixeira !== 'function') return;
+    fbRestaurarLixeira(chave).then(ok => {
+        if (ok) {
+            mostrarToast('↩️ Item restaurado!');
+            // o listener em tempo real recarrega os dados; recarrega a lista da lixeira
+            setTimeout(abrirLixeira, 400);
+        } else {
+            alert('Não foi possível restaurar este item.');
+        }
+    });
+}
+
+function excluirLixeira(chave) {
+    if (!confirm('Apagar este item da lixeira definitivamente? Não poderá mais recuperar.')) return;
+    if (typeof fbExcluirLixeira !== 'function') return;
+    fbExcluirLixeira(chave).then(() => { mostrarToast('Item removido da lixeira'); setTimeout(abrirLixeira, 300); });
 }
 
 // Carregar config dinâmica ao iniciar
