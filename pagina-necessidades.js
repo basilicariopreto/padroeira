@@ -260,34 +260,106 @@ function fmtQtdCard(q) {
 }
 
 // Exporta um CARD (estilo cartaz) por barraca, no visual da Festa da Padroeira
+// ===== HELPERS DE DESENHO DO CARD (estilo cartaz Padroeira) =====
+const CARD_CORES = {
+    azulTopo: [30, 84, 158], azulMeio: [16, 46, 96], azulBase: [8, 24, 54],
+    dourado: [206, 164, 78], douradoClaro: [232, 200, 128],
+    creme: [249, 243, 224], textoEscuro: [24, 46, 86]
+};
+function cardLimparNome(txt) {
+    return String(txt || '')
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\uFE0F\u200D]/gu, '')
+        .replace(/\s+/g, ' ').trim();
+}
+function cardFundo(doc, pageW, pageH) {
+    const C = CARD_CORES;
+    const metade = pageH * 0.55;
+    const faixas = 90;
+    for (let i = 0; i < faixas; i++) {
+        const t = i / (faixas - 1);
+        let r, g, b;
+        if (t < 0.5) { const k = t / 0.5;
+            r = C.azulTopo[0] + (C.azulMeio[0] - C.azulTopo[0]) * k;
+            g = C.azulTopo[1] + (C.azulMeio[1] - C.azulTopo[1]) * k;
+            b = C.azulTopo[2] + (C.azulMeio[2] - C.azulTopo[2]) * k;
+        } else { const k = (t - 0.5) / 0.5;
+            r = C.azulMeio[0] + (C.azulBase[0] - C.azulMeio[0]) * k;
+            g = C.azulMeio[1] + (C.azulBase[1] - C.azulMeio[1]) * k;
+            b = C.azulMeio[2] + (C.azulBase[2] - C.azulMeio[2]) * k;
+        }
+        doc.setFillColor(Math.round(r), Math.round(g), Math.round(b));
+        doc.rect(0, (pageH / faixas) * i, pageW, pageH / faixas + 0.6, 'F');
+    }
+    if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
+        doc.setGState(new doc.GState({ opacity: 0.10 }));
+        doc.setDrawColor(...C.dourado);
+        doc.setLineWidth(1.4);
+        for (let w = 0; w < 5; w++) {
+            const baseY = metade + w * 12;
+            let prevX = 0, prevY = baseY;
+            for (let x = 0; x <= pageW; x += 6) {
+                const y = baseY + Math.sin((x / pageW) * Math.PI * 3 + w) * 6;
+                doc.line(prevX, prevY, x, y);
+                prevX = x; prevY = y;
+            }
+        }
+        doc.setGState(new doc.GState({ opacity: 1 }));
+    }
+}
+function cardMoldura(doc, pageW, pageH) {
+    const C = CARD_CORES;
+    doc.setDrawColor(...C.dourado); doc.setLineWidth(1.3);
+    doc.rect(9, 9, pageW - 18, pageH - 18);
+    doc.setLineWidth(0.4); doc.setDrawColor(...C.douradoClaro);
+    doc.rect(11.5, 11.5, pageW - 23, pageH - 23);
+    const L = 14, off = 9;
+    doc.setDrawColor(...C.dourado); doc.setLineWidth(1.6);
+    [[off, off, 1, 1], [pageW - off, off, -1, 1], [off, pageH - off, 1, -1], [pageW - off, pageH - off, -1, -1]]
+        .forEach(([x, y, sx, sy]) => {
+            doc.line(x, y, x + L * sx, y);
+            doc.line(x, y, x, y + L * sy);
+            doc.setFillColor(...C.dourado);
+            doc.rect(x - 1.3, y - 1.3, 2.6, 2.6, 'F');
+        });
+}
+function cardBadge(doc, cx, cy, texto1, texto2) {
+    const C = CARD_CORES;
+    doc.setFillColor(...C.azulBase); doc.circle(cx, cy, 12, 'F');
+    doc.setDrawColor(...C.dourado); doc.setLineWidth(1.1); doc.circle(cx, cy, 12, 'S');
+    doc.setLineWidth(0.4); doc.circle(cx, cy, 9.5, 'S');
+    doc.setTextColor(...C.douradoClaro); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+    doc.text(texto1, cx, cy - 0.5, { align: 'center' });
+    doc.setFontSize(6); doc.setTextColor(...C.dourado);
+    if (texto2) doc.text(texto2, cx, cy + 4, { align: 'center' });
+}
+function cardDivisoria(doc, cx, y, meia) {
+    const C = CARD_CORES;
+    doc.setDrawColor(...C.dourado); doc.setLineWidth(0.7);
+    doc.line(cx - meia, y, cx - 7, y);
+    doc.line(cx + 7, y, cx + meia, y);
+    doc.setFillColor(...C.dourado);
+    doc.lines([[3, -3], [3, 3], [-3, 3], [-3, -3]], cx - 3, y, [1, 1], 'F', true);
+    doc.setFillColor(...C.douradoClaro);
+    doc.circle(cx - meia, y, 0.9, 'F');
+    doc.circle(cx + meia, y, 0.9, 'F');
+}
+function ordenarItensCard(lista) {
+    const peso = n => {
+        const t = ((n.obs||'') + ' ' + (n.item||'')).toLowerCase();
+        if (t.includes('descart')) return 2;
+        if (t.includes('farofa')) return 1;
+        return 0;
+    };
+    return [...lista].sort((a, b) => peso(a) - peso(b) || (a.item||'').localeCompare(b.item||''));
+}
+
 function exportarNecessidadesCards() {
     if (!dados.necessidades || dados.necessidades.length === 0) { alert('Nenhum item cadastrado'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
-
-    const AZUL_TOPO = [26, 78, 150];
-    const AZUL_MAIS_ESCURO = [7, 22, 50];
-    const DOURADO = [214, 170, 74];
-    const CREME = [248, 241, 220];
-    const TEXTO_ESCURO = [22, 44, 84];
-
-    function limparNome(txt) {
-        return String(txt || '')
-            .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\uFE0F\u200D]/gu, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-    function ordenarItens(lista) {
-        const peso = n => {
-            const t = ((n.obs||'') + ' ' + (n.item||'')).toLowerCase();
-            if (t.includes('descart')) return 2;
-            if (t.includes('farofa')) return 1;
-            return 0;
-        };
-        return [...lista].sort((a, b) => peso(a) - peso(b) || (a.item||'').localeCompare(b.item||''));
-    }
+    const C = CARD_CORES;
 
     const agrupado = {};
     dados.necessidades.forEach(n => {
@@ -302,63 +374,43 @@ function exportarNecessidadesCards() {
 
     keys.forEach((key, idx) => {
         if (idx > 0) doc.addPage();
-        const nome = limparNome(key === 'geral' ? 'Geral' : (NOMES_BARRACAS[key]||key)).toUpperCase();
-        const itens = ordenarItens(agrupado[key]);
+        const nome = cardLimparNome(key === 'geral' ? 'Geral' : (NOMES_BARRACAS[key]||key)).toUpperCase();
+        const itens = ordenarItensCard(agrupado[key]);
 
-        // Fundo com gradiente (faixas)
-        const faixas = 60;
-        for (let i = 0; i < faixas; i++) {
-            const t = i / (faixas - 1);
-            const r = Math.round(AZUL_TOPO[0] + (AZUL_MAIS_ESCURO[0] - AZUL_TOPO[0]) * t);
-            const g = Math.round(AZUL_TOPO[1] + (AZUL_MAIS_ESCURO[1] - AZUL_TOPO[1]) * t);
-            const b = Math.round(AZUL_TOPO[2] + (AZUL_MAIS_ESCURO[2] - AZUL_TOPO[2]) * t);
-            doc.setFillColor(r, g, b);
-            doc.rect(0, (pageH / faixas) * i, pageW, pageH / faixas + 0.5, 'F');
-        }
+        cardFundo(doc, pageW, pageH);
+        cardMoldura(doc, pageW, pageH);
+        cardBadge(doc, pageW / 2, 26, '2026', 'PADROEIRA');
 
-        // Moldura dourada
-        doc.setDrawColor(...DOURADO);
-        doc.setLineWidth(1.2);
-        doc.rect(8, 8, pageW - 16, pageH - 16);
-        doc.setLineWidth(0.4);
-        doc.rect(10.5, 10.5, pageW - 21, pageH - 21);
-
-        // Cabeçalho
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...DOURADO);
-        doc.setFontSize(19);
-        doc.text('MATERIAIS E INSUMOS', pageW / 2, 30, { align: 'center' });
+        doc.setTextColor(...C.dourado);
+        doc.setFontSize(16);
+        doc.text('MATERIAIS  E  INSUMOS', pageW / 2, 52, { align: 'center' });
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(32);
-        const nomeLinhas = doc.splitTextToSize(nome, pageW - 40);
-        doc.text(nomeLinhas, pageW / 2, 46, { align: 'center' });
-        let headBottom = 46 + (nomeLinhas.length - 1) * 12;
+        doc.setFontSize(30);
+        const nomeLinhas = doc.splitTextToSize(nome, pageW - 46);
+        doc.text(nomeLinhas, pageW / 2, 67, { align: 'center' });
+        let headBottom = 67 + (nomeLinhas.length - 1) * 11;
 
         const ly = headBottom + 8;
-        doc.setDrawColor(...DOURADO);
-        doc.setLineWidth(0.6);
-        doc.line(pageW / 2 - 45, ly, pageW / 2 - 6, ly);
-        doc.line(pageW / 2 + 6, ly, pageW / 2 + 45, ly);
-        doc.setFillColor(...DOURADO);
-        doc.rect(pageW / 2 - 2.2, ly - 2.2, 4.4, 4.4, 'F');
+        cardDivisoria(doc, pageW / 2, ly, 48);
 
-        // Caixa creme
-        const boxX = 18, boxTop = ly + 12, boxW = pageW - 36;
+        const boxX = 18, boxTop = ly + 11, boxW = pageW - 36;
         const boxBottomMax = pageH - 30;
         const boxH = boxBottomMax - boxTop;
-        const padX = 12, padTop = 14, padBottom = 8;
+        const padX = 13, padTop = 15, padBottom = 9;
 
         if (typeof doc.GState === 'function' && typeof doc.setGState === 'function') {
             doc.setFillColor(0, 0, 0);
-            doc.setGState(new doc.GState({ opacity: 0.18 }));
-            doc.roundedRect(boxX + 1.5, boxTop + 1.8, boxW, boxH, 7, 7, 'F');
+            doc.setGState(new doc.GState({ opacity: 0.20 }));
+            doc.roundedRect(boxX + 2, boxTop + 2.2, boxW, boxH, 8, 8, 'F');
             doc.setGState(new doc.GState({ opacity: 1 }));
         }
-        doc.setFillColor(...CREME);
-        doc.roundedRect(boxX, boxTop, boxW, boxH, 7, 7, 'F');
-        doc.setDrawColor(...DOURADO);
-        doc.setLineWidth(0.8);
-        doc.roundedRect(boxX, boxTop, boxW, boxH, 7, 7, 'S');
+        doc.setFillColor(...C.creme);
+        doc.roundedRect(boxX, boxTop, boxW, boxH, 8, 8, 'F');
+        doc.setDrawColor(...C.dourado); doc.setLineWidth(1.1);
+        doc.roundedRect(boxX, boxTop, boxW, boxH, 8, 8, 'S');
+        doc.setDrawColor(...C.douradoClaro); doc.setLineWidth(0.4);
+        doc.roundedRect(boxX + 2.2, boxTop + 2.2, boxW - 4.4, boxH - 4.4, 6, 6, 'S');
 
         const linhas = itens.map((n, i) => {
             const q = fmtQtdCard(n.qtd);
@@ -372,23 +424,20 @@ function exportarNecessidadesCards() {
         function planejar(colunas, fonte, entrelinha) {
             const larguraCol = (boxW - padX * 2 - (colunas === 2 ? 10 : 0)) / colunas;
             doc.setFontSize(fonte);
-            const blocos = linhas.map(l => doc.splitTextToSize(l, larguraCol));
+            const blocos = linhas.map(l => doc.splitTextToSize(l, larguraCol - 5));
             const totalVis = blocos.reduce((s, b) => s + b.length, 0);
             const porColuna = Math.ceil(totalVis / colunas);
-            const alturaNecessaria = porColuna * entrelinha;
-            return { larguraCol, blocos, totalVis, cabe: alturaNecessaria <= alturaUtil };
+            return { larguraCol, blocos, totalVis, cabe: porColuna * entrelinha <= alturaUtil };
         }
-
         const tentativas = [
-            { colunas: 1, fonte: 15, entrelinha: 9.2 },
-            { colunas: 1, fonte: 14, entrelinha: 8.6 },
-            { colunas: 1, fonte: 13, entrelinha: 8.0 },
-            { colunas: 1, fonte: 12, entrelinha: 7.2 },
-            { colunas: 2, fonte: 13, entrelinha: 7.6 },
-            { colunas: 2, fonte: 12, entrelinha: 7.0 },
-            { colunas: 2, fonte: 11, entrelinha: 6.4 },
-            { colunas: 2, fonte: 10, entrelinha: 5.9 },
-            { colunas: 2, fonte: 9,  entrelinha: 5.4 }
+            { colunas: 1, fonte: 15, entrelinha: 9.4 },
+            { colunas: 1, fonte: 14, entrelinha: 8.8 },
+            { colunas: 1, fonte: 13, entrelinha: 8.1 },
+            { colunas: 1, fonte: 12, entrelinha: 7.4 },
+            { colunas: 2, fonte: 12, entrelinha: 7.2 },
+            { colunas: 2, fonte: 11, entrelinha: 6.6 },
+            { colunas: 2, fonte: 10, entrelinha: 6.0 },
+            { colunas: 2, fonte: 9,  entrelinha: 5.5 }
         ];
         let plano = null, cfg = null;
         for (const t of tentativas) {
@@ -397,36 +446,37 @@ function exportarNecessidadesCards() {
         }
         if (!plano) { cfg = tentativas[tentativas.length - 1]; plano = planejar(cfg.colunas, cfg.fonte, cfg.entrelinha); }
 
-        doc.setTextColor(...TEXTO_ESCURO);
+        const visuais = [];
+        plano.blocos.forEach(b => b.forEach((l, i) => visuais.push({ txt: l, inicio: i === 0 })));
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(cfg.fonte);
+        const porColuna = Math.ceil(visuais.length / cfg.colunas);
 
-        const linhasVisuais = [];
-        plano.blocos.forEach(b => b.forEach(l => linhasVisuais.push(l)));
-        const porColuna = Math.ceil(linhasVisuais.length / cfg.colunas);
-
+        function desenhaColuna(arr, x, topo) {
+            let ty = topo;
+            arr.forEach(o => {
+                if (o.inicio) { doc.setFillColor(...C.dourado); doc.circle(x - 3, ty - 1.4, 1.1, 'F'); }
+                doc.setTextColor(...C.textoEscuro);
+                doc.text(o.txt, x + 1, ty);
+                ty += cfg.entrelinha;
+            });
+        }
         if (cfg.colunas === 1) {
-            let ty = boxTop + padTop;
-            linhasVisuais.forEach(l => { doc.text(l, boxX + padX, ty); ty += cfg.entrelinha; });
+            desenhaColuna(visuais, boxX + padX + 3, boxTop + padTop);
         } else {
-            const col1 = linhasVisuais.slice(0, porColuna);
-            const col2 = linhasVisuais.slice(porColuna);
-            const x1 = boxX + padX;
-            const x2 = boxX + padX + plano.larguraCol + 10;
-            let ty1 = boxTop + padTop;
-            col1.forEach(l => { doc.text(l, x1, ty1); ty1 += cfg.entrelinha; });
-            let ty2 = boxTop + padTop;
-            col2.forEach(l => { doc.text(l, x2, ty2); ty2 += cfg.entrelinha; });
+            desenhaColuna(visuais.slice(0, porColuna), boxX + padX + 3, boxTop + padTop);
+            desenhaColuna(visuais.slice(porColuna), boxX + padX + 3 + plano.larguraCol + 10, boxTop + padTop);
         }
 
+        cardDivisoria(doc, pageW / 2, pageH - 26, 40);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...DOURADO);
+        doc.setTextColor(...C.dourado);
         doc.setFontSize(13);
-        doc.text('FESTA DA PADROEIRA 2026', pageW / 2, pageH - 20, { align: 'center' });
+        doc.text('FESTA DA PADROEIRA 2026', pageW / 2, pageH - 19, { align: 'center' });
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(225, 230, 240);
-        doc.setFontSize(9);
-        doc.text('Basílica Menor Nossa Senhora da Conceição Aparecida', pageW / 2, pageH - 14, { align: 'center' });
+        doc.setFontSize(8.5);
+        doc.text('Basílica Menor Nossa Senhora da Conceição Aparecida', pageW / 2, pageH - 13.5, { align: 'center' });
     });
 
     doc.save('materiais_insumos_padroeira.pdf');
