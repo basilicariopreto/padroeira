@@ -3554,6 +3554,79 @@ function exportarNecessidadesCSV() {
     link.click();
 }
 
+// Consolida os itens somando o mesmo produto de todas as barracas (por nome + unidade)
+function consolidarNecessidades() {
+    const mapa = {};
+    (dados.necessidades || []).forEach(n => {
+        const nomeLimpoOriginal = (n.item || '').trim();
+        // chave: nome normalizado (minúsculo, sem acento) + unidade
+        const nomeChave = nomeLimpoOriginal.toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const chave = nomeChave + '||' + (n.unidade || '');
+        if (!mapa[chave]) {
+            mapa[chave] = {
+                item: nomeLimpoOriginal, unidade: n.unidade || '',
+                meta: 0, conseguido: 0, barracas: {}
+            };
+        }
+        const g = mapa[chave];
+        g.meta += (n.qtd || 0);
+        g.conseguido += (n.qtdConseguida || 0);
+        const bnome = nomeCategoriaNec(n.barraca || 'geral', false);
+        g.barracas[bnome] = (g.barracas[bnome] || 0) + (n.qtd || 0);
+    });
+    return Object.values(mapa).sort((a, b) => a.item.localeCompare(b.item));
+}
+
+// Exporta um PDF com a LISTA DE COMPRAS CONSOLIDADA (soma total por item)
+function exportarNecessidadesConsolidadoPDF() {
+    if (!dados.necessidades || dados.necessidades.length === 0) { alert('Nenhum item cadastrado'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 20;
+    const cfg = (typeof getConfigEvento === 'function') ? getConfigEvento() : { nomeEvento: 'Festa da Padroeira', edicao: '2026', datas: '09, 10, 11 e 12 de Outubro' };
+
+    doc.setFontSize(16); doc.setTextColor(91, 192, 235);
+    doc.text('LISTA DE COMPRAS (TOTAL GERAL)', pageW / 2, y, { align: 'center' }); y += 8;
+    doc.setFontSize(11); doc.setTextColor(0);
+    doc.text(`${cfg.nomeEvento} - Edição ${cfg.edicao}`, pageW / 2, y, { align: 'center' }); y += 6;
+    doc.text(cfg.datas, pageW / 2, y, { align: 'center' }); y += 6;
+    doc.setFontSize(8); doc.setTextColor(110);
+    doc.text('Soma de cada item em todas as barracas. "Onde" mostra as barracas que pedem o item.', pageW / 2, y, { align: 'center' }); y += 8;
+    doc.setTextColor(0);
+
+    const consolidado = consolidarNecessidades();
+    doc.autoTable({
+        startY: y, theme: 'grid',
+        headStyles: { fillColor: [91, 192, 235], textColor: [255,255,255], fontSize: 9 },
+        styles: { overflow: 'linebreak', cellPadding: 2.5, fontSize: 9 },
+        columnStyles: {
+            0: { cellWidth: 55 },
+            1: { cellWidth: 28, halign: 'center' },
+            2: { cellWidth: 28, halign: 'center' },
+            3: { cellWidth: 72 }
+        },
+        head: [['Item', 'Total', 'Falta', 'Onde (barracas)']],
+        body: consolidado.map(g => {
+            const falta = Math.max(0, g.meta - g.conseguido);
+            const unidade = g.unidade ? ' ' + g.unidade : '';
+            const onde = Object.entries(g.barracas)
+                .map(([b, q]) => `${b}: ${fmtQtdCard(q)}${unidade}`)
+                .join('  •  ');
+            return [
+                g.item,
+                `${fmtQtdCard(g.meta)}${unidade}`,
+                falta === 0 ? 'OK' : `${fmtQtdCard(falta)}${unidade}`,
+                onde
+            ];
+        })
+    });
+
+    doc.save('lista_compras_total_padroeira.pdf');
+    if (typeof mostrarToast === 'function') mostrarToast('📄 Lista de compras (total) exportada!');
+}
+
 // Unidade por extenso para os cards (ex: 160 Kg - Carne Moída)
 function unidadeExtenso(u, qtd) {
     const plural = (qtd || 0) > 1;
