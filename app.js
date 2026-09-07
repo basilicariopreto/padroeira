@@ -2064,7 +2064,7 @@ function gerarPDFComLogo(logoBase64) {
             return (NOMES_BARRACAS[a]||a).localeCompare(NOMES_BARRACAS[b]||b);
         });
         necKeys.forEach(key => {
-            const nome = key === 'geral' ? 'Geral (Infraestrutura)' : (NOMES_BARRACAS[key]||key).replace(/^.{2}\s?/,'');
+            const nome = nomeCategoriaNec(key, false);
             const itens = necAgrup[key];
             if (y + 15 > 270) { doc.addPage(); y = 20; }
             doc.autoTable({
@@ -3293,6 +3293,25 @@ function renderizarDoacoesEntrada() {
 }
 
 // ===== ITENS NECESSÁRIOS POR BARRACA =====
+// Categorias especiais que aparecem SÓ nas necessidades (não são barracas de verdade)
+const CATEGORIAS_NEC_ESPECIAIS = {
+    geral: 'Geral (evento todo)',
+    descartaveis: 'Descartáveis'
+};
+// Nome de exibição de uma categoria de necessidade (barraca real OU categoria especial)
+function nomeCategoriaNec(key, comEmoji) {
+    if (key === 'geral') return comEmoji ? '🏗️ Geral (Infraestrutura/Evento)' : 'Geral';
+    if (key === 'descartaveis') return comEmoji ? '🧻 Descartáveis' : 'Descartáveis';
+    const nome = NOMES_BARRACAS[key] || key;
+    return comEmoji ? nome : nome.replace(/^.{2}\s?/, '');
+}
+// Opções fixas (categorias especiais) para o select de necessidades
+function opcoesFixasNec(selecionado) {
+    return Object.entries(CATEGORIAS_NEC_ESPECIAIS).map(([v, label]) =>
+        `<option value="${v}" ${selecionado === v ? 'selected' : ''}>${label}</option>`
+    ).join('');
+}
+
 function adicionarNecessidade() {
     const barraca = document.getElementById('necessidadeBarraca').value;
     const item = document.getElementById('necessidadeItem').value.trim();
@@ -3355,7 +3374,7 @@ function renderizarNecessidades() {
     const select = document.getElementById('necessidadeBarraca');
     if (select) {
         const valorAtual = select.value;
-        const opts = '<option value="geral">Geral (evento todo)</option>' + BARRACAS.map(b =>
+        const opts = opcoesFixasNec() + BARRACAS.map(b =>
             `<option value="${b}">${(NOMES_BARRACAS[b]||b).replace(/^.{2}\s?/,'')}</option>`
         ).join('');
         select.innerHTML = opts;
@@ -3380,15 +3399,17 @@ function renderizarNecessidades() {
     const totalConseguidos = dados.necessidades.filter(n => n.conseguido).length;
     html += `<div class="resumo-barraca" style="margin-bottom:15px"><div class="item neutro"><span>Total de Itens</span><strong>${totalItens}</strong></div><div class="item positivo"><span>Concluídos</span><strong>${totalConseguidos}</strong></div><div class="item negativo"><span>Faltando</span><strong>${totalItens - totalConseguidos}</strong></div></div>`;
 
-    // Ordenar: geral primeiro, depois por nome de barraca
+    // Ordenar: geral primeiro, descartáveis por último, barracas no meio (por nome)
     const keys = Object.keys(agrupado).sort((a, b) => {
         if (a === 'geral') return -1;
         if (b === 'geral') return 1;
+        if (a === 'descartaveis') return 1;
+        if (b === 'descartaveis') return -1;
         return (NOMES_BARRACAS[a]||a).localeCompare(NOMES_BARRACAS[b]||b);
     });
 
     keys.forEach(key => {
-        const nome = key === 'geral' ? '🏗️ Geral (Infraestrutura/Evento)' : (NOMES_BARRACAS[key] || key);
+        const nome = nomeCategoriaNec(key, true);
         const itens = agrupado[key];
         const conseguidos = itens.filter(n => n.conseguido).length;
         html += `<div class="tabela-box" style="margin-bottom:12px">
@@ -3425,7 +3446,7 @@ function editarNecessidade(id) {
     edicaoAtual = { tipo: 'necessidade', id };
     const unidades = ['un','kg','g','L','cx','pct','fardo','dz','lata','saco','bandeja'];
     const unidadeOpts = unidades.map(u => `<option value="${u}" ${item.unidade === u ? 'selected' : ''}>${u}</option>`).join('');
-    const barracaOpts = '<option value="geral" ' + (item.barraca === 'geral' ? 'selected' : '') + '>Geral (evento todo)</option>' +
+    const barracaOpts = opcoesFixasNec(item.barraca) +
         BARRACAS.map(b => `<option value="${b}" ${item.barraca === b ? 'selected' : ''}>${(NOMES_BARRACAS[b]||b).replace(/^.{2}\s?/,'')}</option>`).join('');
     document.getElementById('modalConteudo').innerHTML = `
         <div class="campo"><label>Barraca</label><select id="editNecBarraca">${barracaOpts}</select></div>
@@ -3490,11 +3511,12 @@ function exportarNecessidadesPDF() {
 
     const keys = Object.keys(agrupado).sort((a, b) => {
         if (a === 'geral') return -1; if (b === 'geral') return 1;
+        if (a === 'descartaveis') return 1; if (b === 'descartaveis') return -1;
         return (NOMES_BARRACAS[a]||a).localeCompare(NOMES_BARRACAS[b]||b);
     });
 
     keys.forEach(key => {
-        const nome = key === 'geral' ? 'Geral (Infraestrutura)' : (NOMES_BARRACAS[key]||key).replace(/^.{2}\s?/,'');
+        const nome = nomeCategoriaNec(key, false);
         const itens = agrupado[key];
         if (y + 20 > 270) { doc.addPage(); y = 20; }
         doc.autoTable({
@@ -3693,12 +3715,13 @@ function exportarNecessidadesCards() {
     });
     const keys = Object.keys(agrupado).sort((a, b) => {
         if (a === 'geral') return -1; if (b === 'geral') return 1;
+        if (a === 'descartaveis') return 1; if (b === 'descartaveis') return -1;
         return (NOMES_BARRACAS[a]||a).localeCompare(NOMES_BARRACAS[b]||b);
     });
 
     keys.forEach((key, idx) => {
         if (idx > 0) doc.addPage();
-        const nome = cardLimparNome(key === 'geral' ? 'Geral' : (NOMES_BARRACAS[key]||key)).toUpperCase();
+        const nome = cardLimparNome(nomeCategoriaNec(key, false)).toUpperCase();
         const itens = itens_ordenar(agrupado[key]);
 
         // ===== FUNDO + MOLDURA =====
