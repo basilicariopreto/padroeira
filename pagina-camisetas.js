@@ -203,21 +203,11 @@ function renderizarPagina() {
     else if (filtroCamisa === 'pendente') lista = lista.filter(c => !c.pago);
     lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
 
-    const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
     const tbody = document.querySelector('#tabelaCamisetas tbody');
     if (tbody) {
-        tbody.innerHTML = lista.map(c => `
-            <tr>
-                <td style="font-weight:700">${c.nome}</td>
-                <td>${c.telefone || '-'}</td>
-                <td><span class="badge-categoria">${TIPO_LABEL[c.tipo] || c.tipo}</span></td>
-                <td>${c.modelagem}</td>
-                <td>${c.tamanho}</td>
-                <td>${(c.valor||0) > 0 ? 'R$ ' + fmt(c.valor) : '-'}</td>
-                <td><span class="${c.pago ? 'badge-pago' : 'badge-pendente'}" onclick="togglePagoCamiseta(${c.id})">${c.pago ? 'Pago' : 'Pendente'}</span></td>
-                <td><button class="btn-edit" onclick="editarCamiseta(${c.id})">✏️</button></td>
-            </tr>
-        `).join('') || '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:15px">Nenhuma camiseta registrada</td></tr>';
+        const grupos = agruparCamisetas(lista);
+        tbody.innerHTML = grupos.map(g => linhaGrupoCamiseta(g)).join('')
+            || '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:15px">Nenhuma camiseta registrada</td></tr>';
     }
 
     // Resumo simples (só contagem, SEM valores financeiros) — esta página é para quem vende
@@ -239,6 +229,64 @@ function renderizarPagina() {
 
     atualizarTamanhosCamiseta();
     renderizarQtdPorTamanho();
+}
+
+// Agrupa camisetas iguais (nome+telefone+tipo+tamanho+pago) para a tabela ficar enxuta
+function agruparCamisetas(lista) {
+    const mapa = {};
+    lista.forEach(c => {
+        const chave = [c.nome||'', c.telefone||'', c.tipo||'', c.tamanho||'', c.pago?1:0].join('|');
+        if (!mapa[chave]) mapa[chave] = { ...c, qtd: 0, ids: [] };
+        mapa[chave].qtd++;
+        mapa[chave].ids.push(c.id);
+    });
+    return Object.values(mapa).sort((a,b) =>
+        (a.nome||'').localeCompare(b.nome||'') ||
+        (a.tipo||'').localeCompare(b.tipo||'') ||
+        TAMANHOS_LISTA.indexOf(a.tamanho) - TAMANHOS_LISTA.indexOf(b.tamanho) ||
+        (a.pago?1:0) - (b.pago?1:0)
+    );
+}
+
+// Linha agrupada (esta página NÃO mostra valores financeiros)
+function linhaGrupoCamiseta(g) {
+    const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
+    const idsStr = g.ids.join(',');
+    return `
+        <tr>
+            <td style="font-weight:700">${g.nome}</td>
+            <td>${g.telefone || '-'}</td>
+            <td><span class="badge-categoria">${TIPO_LABEL[g.tipo] || g.tipo}</span></td>
+            <td>${g.tamanho}</td>
+            <td style="text-align:center;font-weight:700">${g.qtd}</td>
+            <td><span class="${g.pago ? 'badge-pago' : 'badge-pendente'}" onclick="pagarGrupoCamiseta('${idsStr}')" style="cursor:pointer">${g.pago ? 'Pago' : 'Pendente'}</span></td>
+            <td><button class="btn-edit" onclick="editarCamiseta(${g.ids[0]})" title="Editar">✏️</button></td>
+        </tr>`;
+}
+
+// Marca pago/pendente; se grupo pendente com mais de 1, pergunta quantos pagar
+function pagarGrupoCamiseta(idsStr) {
+    const ids = String(idsStr).split(',');
+    const itens = (dados.camisetas || []).filter(c => ids.includes(String(c.id)));
+    if (itens.length === 0) return;
+    if (itens[0].pago) {
+        itens.forEach(c => atualizarItem('camisetas', c.id, { pago: false }));
+        renderizarPagina();
+        return;
+    }
+    if (itens.length === 1) {
+        atualizarItem('camisetas', itens[0].id, { pago: true });
+        renderizarPagina();
+        return;
+    }
+    const resp = prompt(`Quantas camisetas estão sendo pagas agora?\n(${itens.length} pendentes de ${itens[0].nome} - tamanho ${itens[0].tamanho})`, String(itens.length));
+    if (resp === null) return;
+    let n = parseInt(resp);
+    if (isNaN(n) || n <= 0) { alert('Digite um número válido.'); return; }
+    if (n > itens.length) n = itens.length;
+    for (let i = 0; i < n; i++) atualizarItem('camisetas', itens[i].id, { pago: true });
+    renderizarPagina();
+    mostrarToast(`✅ ${n} camiseta${n>1?'s':''} marcada${n>1?'s':''} como paga${n>1?'s':''}!`);
 }
 
 // Quantidade por tamanho, separada por tipo (vendidas / disponíveis)

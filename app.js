@@ -4227,24 +4227,11 @@ function renderizarCamisetas() {
     else if (filtroCamisa === 'pendente') lista = lista.filter(c => !c.pago);
     lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
 
-    const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
     const tbody = document.querySelector('#tabelaCamisetas tbody');
     if (tbody) {
-        tbody.innerHTML = lista.map(c => `
-            <tr>
-                <td style="font-weight:700">${c.nome}</td>
-                <td>${c.telefone || '-'}</td>
-                <td><span class="badge-categoria">${TIPO_LABEL[c.tipo] || c.tipo}</span></td>
-                <td>${c.modelagem}</td>
-                <td>${c.tamanho}</td>
-                <td>${(c.valor||0) > 0 ? 'R$ ' + fmt(c.valor) : '-'}</td>
-                <td><span class="${c.pago ? 'badge-pago' : 'badge-pendente'}" onclick="togglePagoCamiseta(${c.id})">${c.pago ? 'Pago' : 'Pendente'}</span></td>
-                <td>
-                    <button class="btn-edit" onclick="editarCamiseta(${c.id})">✏️</button>
-                    <button class="btn-delete" onclick="removerCamiseta(${c.id})">X</button>
-                </td>
-            </tr>
-        `).join('') || '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:15px">Nenhuma camiseta registrada</td></tr>';
+        const grupos = agruparCamisetas(lista);
+        tbody.innerHTML = grupos.map(g => linhaGrupoCamiseta(g)).join('')
+            || '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:15px">Nenhuma camiseta registrada</td></tr>';
     }
 
     const todas = dados.camisetas;
@@ -4270,6 +4257,99 @@ function renderizarCamisetas() {
     }
 
     renderizarQtdPorTamanho();
+}
+
+// Agrupa camisetas iguais (nome+telefone+tipo+tamanho+valor+pago) para a tabela ficar enxuta
+function agruparCamisetas(lista) {
+    const mapa = {};
+    lista.forEach(c => {
+        const chave = [c.nome||'', c.telefone||'', c.tipo||'', c.tamanho||'', c.valor||0, c.pago?1:0].join('|');
+        if (!mapa[chave]) mapa[chave] = { ...c, qtd: 0, ids: [] };
+        mapa[chave].qtd++;
+        mapa[chave].ids.push(c.id);
+    });
+    return Object.values(mapa).sort((a,b) =>
+        (a.nome||'').localeCompare(b.nome||'') ||
+        (a.tipo||'').localeCompare(b.tipo||'') ||
+        TAMANHOS_LISTA.indexOf(a.tamanho) - TAMANHOS_LISTA.indexOf(b.tamanho) ||
+        (a.pago?1:0) - (b.pago?1:0)
+    );
+}
+
+// Monta a linha (agrupada) da tabela de camisetas
+function linhaGrupoCamiseta(g) {
+    const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
+    const valorUnit = g.valor || 0;
+    const valorTotal = valorUnit * g.qtd;
+    const idsStr = g.ids.join(',');
+    return `
+        <tr>
+            <td style="font-weight:700">${g.nome}</td>
+            <td>${g.telefone || '-'}</td>
+            <td><span class="badge-categoria">${TIPO_LABEL[g.tipo] || g.tipo}</span></td>
+            <td>${g.tamanho}</td>
+            <td style="text-align:center;font-weight:700">${g.qtd}</td>
+            <td>${valorUnit > 0 ? 'R$ ' + fmt(valorTotal) + (g.qtd > 1 ? `<br><small style="opacity:0.6">(${g.qtd}x R$ ${fmt(valorUnit)})</small>` : '') : '-'}</td>
+            <td><span class="${g.pago ? 'badge-pago' : 'badge-pendente'}" onclick="pagarGrupoCamiseta('${idsStr}')" style="cursor:pointer">${g.pago ? 'Pago' : 'Pendente'}</span></td>
+            <td style="white-space:nowrap">
+                <button class="btn-edit" onclick="editarCamiseta(${g.ids[0]})" title="Editar">✏️</button>
+                <button class="btn-delete" onclick="removerGrupoCamiseta('${idsStr}')" title="Remover">X</button>
+            </td>
+        </tr>`;
+}
+
+// Marca como pago/pendente. Se o grupo tem mais de 1 e está pendente, pergunta quantos pagar.
+function pagarGrupoCamiseta(idsStr) {
+    const ids = String(idsStr).split(',');
+    const itens = (dados.camisetas || []).filter(c => ids.includes(String(c.id)));
+    if (itens.length === 0) return;
+    const jaPago = itens[0].pago;
+
+    if (jaPago) {
+        // Grupo pago -> volta tudo para pendente
+        itens.forEach(c => atualizarItem('camisetas', c.id, { pago: false }));
+        renderizarCamisetas();
+        return;
+    }
+
+    // Grupo pendente
+    if (itens.length === 1) {
+        atualizarItem('camisetas', itens[0].id, { pago: true });
+        renderizarCamisetas();
+        return;
+    }
+
+    // Mais de um: pergunta quantos estão sendo pagos
+    const resp = prompt(`Quantas camisetas estão sendo pagas agora?\n(${itens.length} pendentes de ${itens[0].nome} - tamanho ${itens[0].tamanho})`, String(itens.length));
+    if (resp === null) return;
+    let n = parseInt(resp);
+    if (isNaN(n) || n <= 0) { alert('Digite um número válido.'); return; }
+    if (n > itens.length) n = itens.length;
+    for (let i = 0; i < n; i++) atualizarItem('camisetas', itens[i].id, { pago: true });
+    renderizarCamisetas();
+    mostrarToast(`✅ ${n} camiseta${n>1?'s':''} marcada${n>1?'s':''} como paga${n>1?'s':''}!`);
+}
+
+// Remove um grupo inteiro (pergunta quantas, se mais de uma)
+function removerGrupoCamiseta(idsStr) {
+    const ids = String(idsStr).split(',');
+    const itens = (dados.camisetas || []).filter(c => ids.includes(String(c.id)));
+    if (itens.length === 0) return;
+    if (itens.length === 1) {
+        if (!confirm('Remover esta camiseta?')) return;
+        removerItem('camisetas', itens[0].id);
+        renderizarCamisetas();
+        return;
+    }
+    const resp = prompt(`Quantas remover? (${itens.length} de ${itens[0].nome} - tamanho ${itens[0].tamanho})\nDigite o número, ou "tudo" para remover todas.`, 'tudo');
+    if (resp === null) return;
+    let n;
+    if (String(resp).trim().toLowerCase() === 'tudo') n = itens.length;
+    else { n = parseInt(resp); if (isNaN(n) || n <= 0) { alert('Digite um número válido ou "tudo".'); return; } }
+    if (n > itens.length) n = itens.length;
+    for (let i = 0; i < n; i++) removerItem('camisetas', itens[i].id);
+    renderizarCamisetas();
+    mostrarToast(`${n} camiseta${n>1?'s':''} removida${n>1?'s':''}.`);
 }
 
 // Quantidade vendida por tamanho (separado por modelagem)
