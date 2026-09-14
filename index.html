@@ -13,6 +13,18 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- TELA DE LOGIN (admin) -->
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-box">
+            <h2>🔒 Painel Administrativo</h2>
+            <p>Festa da Padroeira 2026</p>
+            <input type="text" id="loginUsuario" placeholder="Usuário" autocomplete="username">
+            <input type="password" id="loginSenha" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
+            <button class="btn-venda" onclick="fazerLogin()">Entrar</button>
+            <p id="loginErro" class="login-erro"></p>
+        </div>
+    </div>
+
     <div class="bandeirinhas">
         <div class="bandeirinha b1"></div><div class="bandeirinha b2"></div>
         <div class="bandeirinha b3"></div><div class="bandeirinha b4"></div>
@@ -43,7 +55,9 @@
             <input type="text" id="buscaGlobal" placeholder="🔍 Buscar (vendas, despesas, patrocinadores...)" oninput="buscaGlobalFn()">
         </div>
         <div class="status-right">
+            <span id="usuarioLogadoInfo" style="font-size:0.8rem;color:var(--cor-palha);opacity:0.85;margin-right:8px"></span>
             <button class="btn-historico" onclick="toggleHistorico()">📋 Histórico</button>
+            <button class="btn-historico" onclick="sairLogin()" title="Sair do painel">🚪 Sair</button>
         </div>
     </div>
 
@@ -117,6 +131,7 @@
             <button class="menu-btn" data-section="caixas">🧑‍💼 Caixas</button>
             <button class="menu-btn" data-section="camisetas">👕 Camisetas</button>
             <button class="menu-btn" data-section="config">⚙️ Config</button>
+            <button class="menu-btn" data-section="usuarios" style="display:none">🔑 Usuários</button>
         </div>
         <div class="menu-barracas-vendas">
             <span class="menu-vendas-label">Barracas:</span>
@@ -1094,6 +1109,32 @@
                     <button class="btn-export" onclick="limparEdicaoAnterior()" id="btnLimparAnterior" style="display:none">🗑️ Remover Comparativo</button>
                 </div>
                 <div id="comparativoStatus"></div>
+            </div>
+        </section>
+
+        <!-- USUÁRIOS (só admin) -->
+        <section id="sec-usuarios" class="section">
+            <h2>🔑 Usuários do Painel</h2>
+            <p class="secao-desc">Cadastre organizadores que poderão acessar este painel. Eles têm acesso a tudo, exceto esta tela de usuários. Só o admin gerencia usuários.</p>
+
+            <div class="painel-madeira">
+                <h3>Cadastrar / Atualizar Usuário</h3>
+                <div class="form-row">
+                    <input type="text" id="novoUsuarioLogin" placeholder="Usuário (ex: joao)" style="flex:1">
+                    <input type="text" id="novoUsuarioNome" placeholder="Nome completo" style="flex:2">
+                    <input type="text" id="novoUsuarioSenha" placeholder="Senha">
+                    <button class="btn-venda" onclick="criarUsuario()">Salvar Usuário</button>
+                </div>
+                <p class="secao-desc" style="margin-top:8px">Para trocar a senha de alguém, cadastre de novo com o mesmo usuário.</p>
+            </div>
+
+            <div class="tabela-box" style="margin-top:15px">
+                <h4>Usuários cadastrados</h4>
+                <table id="tabelaUsuarios">
+                    <thead><tr><th>Usuário</th><th>Nome</th><th>Criado em</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <p style="font-size:0.8rem;opacity:0.6;margin-top:8px">O usuário <strong>admin</strong> é fixo do sistema e não aparece na lista.</p>
             </div>
         </section>
 

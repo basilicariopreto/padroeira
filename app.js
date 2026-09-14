@@ -250,6 +250,57 @@ function atualizarItem(campo, id, novosCampos) {
     else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
 }
 
+// ===== SESSÃO / LOGIN (admin) =====
+const SESSAO_KEY = 'padroeira_sessao';
+let usuarioLogado = null; // { nome, admin }
+
+function carregarSessao() {
+    try { return JSON.parse(localStorage.getItem(SESSAO_KEY) || 'null'); } catch { return null; }
+}
+
+function aplicarSessao(u) {
+    usuarioLogado = u;
+    document.body.classList.add('logado');
+    // Mostra quem está logado + botão sair (se existir o espaço)
+    const el = document.getElementById('usuarioLogadoInfo');
+    if (el) el.textContent = `👤 ${u.nome}${u.admin ? ' (admin)' : ''}`;
+    // Mostra/esconde o menu e a seção de Usuários (só admin)
+    const menuUsuarios = document.querySelector('[data-section="usuarios"]');
+    if (menuUsuarios) menuUsuarios.style.display = u.admin ? '' : 'none';
+    if (u.admin && typeof renderizarUsuarios === 'function') renderizarUsuarios();
+}
+
+function fazerLogin() {
+    const usuario = document.getElementById('loginUsuario').value;
+    const senha = document.getElementById('loginSenha').value;
+    const erro = document.getElementById('loginErro');
+    if (!usuario || !senha) { if (erro) erro.textContent = 'Preencha usuário e senha.'; return; }
+    if (typeof fbValidarLogin !== 'function') { if (erro) erro.textContent = 'Sistema indisponível.'; return; }
+    if (erro) erro.textContent = 'Verificando...';
+    fbValidarLogin(usuario, senha).then(res => {
+        if (res && res.ok) {
+            localStorage.setItem(SESSAO_KEY, JSON.stringify(res.usuario));
+            aplicarSessao(res.usuario);
+            if (erro) erro.textContent = '';
+            if (typeof registrarAcao === 'function') registrarAcao(`Login: ${res.usuario.nome}`);
+        } else {
+            if (erro) erro.textContent = 'Usuário ou senha incorretos.';
+        }
+    });
+}
+
+function sairLogin() {
+    if (!confirm('Sair do painel?')) return;
+    localStorage.removeItem(SESSAO_KEY);
+    location.reload();
+}
+
+// Aplica sessão salva imediatamente (se já estava logado)
+(function initSessao() {
+    const s = carregarSessao();
+    if (s && s.nome) aplicarSessao(s);
+})();
+
 let dados = carregarDados();
 
 // Ao iniciar, carrega do Firebase (dados mais recentes)
@@ -2493,6 +2544,57 @@ function excluirBackup(data) {
     if (!confirm('Apagar este backup definitivamente?')) return;
     if (typeof fbExcluirBackup !== 'function') return;
     fbExcluirBackup(data).then(() => { mostrarToast('Backup removido'); setTimeout(abrirBackups, 300); });
+}
+
+// ===== USUÁRIOS (UI - só admin) =====
+function renderizarUsuarios() {
+    if (!usuarioLogado || !usuarioLogado.admin) return;
+    const tbody = document.querySelector('#tabelaUsuarios tbody');
+    if (!tbody || typeof fbListarUsuarios !== 'function') return;
+    fbListarUsuarios().then(lista => {
+        tbody.innerHTML = lista.map(u => {
+            const quando = u.criadoEm ? new Date(u.criadoEm).toLocaleDateString('pt-BR') : '-';
+            return `<tr>
+                <td style="font-weight:700">${u.usuario}</td>
+                <td>${u.nome}</td>
+                <td style="font-size:0.8rem;opacity:0.8">${quando}</td>
+                <td><button class="btn-delete" onclick="removerUsuarioPainel('${u.usuario}')">X</button></td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="4" style="text-align:center;opacity:0.5;padding:15px">Nenhum organizador cadastrado</td></tr>';
+    });
+}
+
+function criarUsuario() {
+    if (!usuarioLogado || !usuarioLogado.admin) { alert('Apenas o admin pode gerenciar usuários.'); return; }
+    const login = (document.getElementById('novoUsuarioLogin').value || '').trim().toLowerCase();
+    const nome = document.getElementById('novoUsuarioNome').value.trim();
+    const senha = document.getElementById('novoUsuarioSenha').value;
+    if (!login || !nome || !senha) { alert('Preencha usuário, nome e senha.'); return; }
+    if (login === 'admin') { alert('O usuário "admin" é reservado do sistema.'); return; }
+    if (senha.length < 4) { alert('A senha deve ter pelo menos 4 caracteres.'); return; }
+    fbSalvarUsuario(login, nome, senha).then(ok => {
+        if (ok) {
+            document.getElementById('novoUsuarioLogin').value = '';
+            document.getElementById('novoUsuarioNome').value = '';
+            document.getElementById('novoUsuarioSenha').value = '';
+            mostrarToast(`✅ Usuário "${login}" salvo!`);
+            registrarAcao(`Usuário cadastrado/atualizado: ${login}`);
+            renderizarUsuarios();
+        } else {
+            alert('Não foi possível salvar o usuário.');
+        }
+    });
+}
+
+function removerUsuarioPainel(usuario) {
+    if (!usuarioLogado || !usuarioLogado.admin) { alert('Apenas o admin pode gerenciar usuários.'); return; }
+    if (!confirm(`Remover o acesso do usuário "${usuario}"?`)) return;
+    if (typeof fbRemoverUsuario !== 'function') return;
+    fbRemoverUsuario(usuario).then(() => {
+        mostrarToast('Usuário removido');
+        registrarAcao(`Usuário removido: ${usuario}`);
+        renderizarUsuarios();
+    });
 }
 
 // Carregar config dinâmica ao iniciar

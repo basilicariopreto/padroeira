@@ -766,3 +766,41 @@ td .btn-edit:hover { background: var(--cor-amarelo); color: var(--cor-fundo); }
     -webkit-appearance: none;
     margin: 0;
 }
+
+/* ===== TELA DE LOGIN (admin) ===== */
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: linear-gradient(160deg, #0a1e42, #12376e 55%, #071630);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.login-box {
+    background: rgba(10, 30, 66, 0.85);
+    border: 1.5px solid rgba(214, 170, 74, 0.6);
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.login-box h2 { color: #d6aa4a; margin: 0 0 4px; font-size: 1.4rem; }
+.login-box p { color: #cdd6e5; margin: 0 0 20px; font-size: 0.9rem; }
+.login-box input {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+.login-box button { width: 100%; padding: 12px; font-size: 1rem; margin-top: 4px; }
+.login-erro { color: #ef5350 !important; min-height: 18px; margin-top: 10px !important; font-weight: 600; }
+body.logado .login-overlay { display: none; }

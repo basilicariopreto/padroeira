@@ -228,3 +228,58 @@ function fbRestaurarBackup(data) {
 function fbExcluirBackup(data) {
     return dbRef.child('backups').child(data).remove().catch(err => console.error('Erro ao excluir backup:', err));
 }
+
+// ===== USUÁRIOS / LOGIN (admin) =====
+// Usuários ficam no nó 'usuarios' do Firebase com a senha em HASH (SHA-256).
+// O usuário "admin" é fixo no código (senha Basilica2026) e sempre pode gerenciar usuários.
+// OBS: por ser site estático, isto é uma "tranca" (impede uso casual), não segurança de banco.
+
+async function hashSenha(texto) {
+    try {
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        // fallback simples caso crypto.subtle não esteja disponível (contexto não-HTTPS)
+        let h = 0; for (let i = 0; i < texto.length; i++) { h = (h << 5) - h + texto.charCodeAt(i); h |= 0; }
+        return 'f' + String(h);
+    }
+}
+
+// Valida login. Retorna { ok, usuario: {nome, admin} } ou { ok:false }
+async function fbValidarLogin(usuario, senha) {
+    const u = (usuario || '').trim().toLowerCase();
+    // Admin fixo
+    if (u === 'admin' && senha === 'Basilica2026') {
+        return { ok: true, usuario: { nome: 'admin', admin: true } };
+    }
+    try {
+        const snap = await dbRef.child('usuarios').child(u).once('value');
+        const reg = snap.val();
+        if (!reg) return { ok: false };
+        const h = await hashSenha(senha);
+        if (h === reg.senhaHash) return { ok: true, usuario: { nome: reg.nome || u, admin: false } };
+        return { ok: false };
+    } catch (e) { return { ok: false }; }
+}
+
+// Cria/atualiza um usuário organizador (só o admin chama). Retorna Promise<boolean>
+async function fbSalvarUsuario(usuario, nome, senha) {
+    const u = (usuario || '').trim().toLowerCase();
+    if (!u || u === 'admin') return false;
+    const senhaHash = await hashSenha(senha);
+    return dbRef.child('usuarios').child(u).set({
+        nome: nome || u, senhaHash, criadoEm: new Date().toISOString()
+    }).then(() => true).catch(() => false);
+}
+
+function fbListarUsuarios() {
+    return dbRef.child('usuarios').once('value').then(snap => {
+        const val = snap.val() || {};
+        return Object.keys(val).map(k => ({ usuario: k, nome: val[k].nome || k, criadoEm: val[k].criadoEm || '' }))
+            .sort((a, b) => a.usuario.localeCompare(b.usuario));
+    }).catch(() => []);
+}
+
+function fbRemoverUsuario(usuario) {
+    return dbRef.child('usuarios').child((usuario || '').toLowerCase()).remove().catch(() => {});
+}
