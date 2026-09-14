@@ -4413,20 +4413,23 @@ function exportarCamisetasPDF() {
     doc.text(cfg.datas, pageW / 2, y, { align: 'center' }); y += 12;
 
     const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    const ordenada = [...lista].sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+    const grupos = agruparCamisetas(lista);
     doc.autoTable({
         startY: y, theme: 'grid',
         headStyles: { fillColor: [91, 192, 235], textColor: [255,255,255], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
         styles: { overflow: 'linebreak', cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 42 }, 1: { cellWidth: 28 }, 2: { cellWidth: 24 }, 3: { cellWidth: 24 }, 4: { cellWidth: 16 }, 5: { cellWidth: 22 }, 6: { cellWidth: 22 } },
-        head: [['Nome', 'Telefone', 'Tipo', 'Modelagem', 'Tam.', 'Valor', 'Status']],
-        body: ordenada.map(c => [
-            c.nome || '-', c.telefone || '-', TIPO_LABEL[c.tipo] || c.tipo,
-            c.modelagem || '-', c.tamanho || '-',
-            (c.valor||0) > 0 ? 'R$ ' + fmt(c.valor) : '-',
-            c.pago ? 'Pago' : 'Pendente'
-        ])
+        columnStyles: { 0: { cellWidth: 46 }, 1: { cellWidth: 30 }, 2: { cellWidth: 26 }, 3: { cellWidth: 18 }, 4: { cellWidth: 14 }, 5: { cellWidth: 26 }, 6: { cellWidth: 24 } },
+        head: [['Nome', 'Telefone', 'Tipo', 'Tam.', 'Qtd', 'Valor', 'Status']],
+        body: grupos.map(g => {
+            const valorTotal = (g.valor || 0) * g.qtd;
+            return [
+                g.nome || '-', g.telefone || '-', TIPO_LABEL[g.tipo] || g.tipo,
+                g.tamanho || '-', String(g.qtd),
+                valorTotal > 0 ? 'R$ ' + fmt(valorTotal) : '-',
+                g.pago ? 'Pago' : 'Pendente'
+            ];
+        })
     });
     y = doc.lastAutoTable.finalY + 8;
     const totalValor = lista.reduce((s,c) => s + (c.valor||0), 0);
@@ -4449,9 +4452,11 @@ function exportarCamisetasCSV() {
     const lista = dados.camisetas || [];
     if (lista.length === 0) { alert('Nenhuma camiseta registrada'); return; }
     const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    let csv = 'Nome;Telefone;Tipo;Modelagem;Tamanho;Valor;Status\n';
-    [...lista].sort((a,b) => (a.nome||'').localeCompare(b.nome||'')).forEach(c => {
-        csv += `${c.nome||''};${c.telefone||''};${TIPO_LABEL[c.tipo]||c.tipo};${c.modelagem||''};${c.tamanho||''};${(c.valor||0) > 0 ? fmt(c.valor) : ''};${c.pago ? 'Pago' : 'Pendente'}\n`;
+    let csv = 'Nome;Telefone;Tipo;Tamanho;Qtd;Valor Unitário;Valor Total;Status\n';
+    agruparCamisetas(lista).forEach(g => {
+        const unit = g.valor || 0;
+        const total = unit * g.qtd;
+        csv += `${g.nome||''};${g.telefone||''};${TIPO_LABEL[g.tipo]||g.tipo};${g.tamanho||''};${g.qtd};${unit > 0 ? fmt(unit) : ''};${total > 0 ? fmt(total) : ''};${g.pago ? 'Pago' : 'Pendente'}\n`;
     });
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
