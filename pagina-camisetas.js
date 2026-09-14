@@ -43,7 +43,7 @@ function renderizarGradeTamanhosCamisa() {
         }
         return `<div style="text-align:center">
             <label style="display:block;font-size:0.78rem;color:var(--cor-palha);font-weight:700;margin-bottom:2px">${x.t}</label>
-            <input type="number" id="${id}" value="" min="0" placeholder="0" style="width:52px;text-align:center" oninput="atualizarTotalCamisa()">
+            <input type="number" inputmode="numeric" id="${id}" value="" min="0" placeholder="0" class="input-tam-camisa" oninput="atualizarTotalCamisa()">
             ${info}
         </div>`;
     }).join('');

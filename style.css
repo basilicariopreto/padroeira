@@ -750,3 +750,19 @@ td .btn-edit:hover { background: var(--cor-amarelo); color: var(--cor-fundo); }
     border-color: var(--cor-amarelo);
     box-shadow: 0 6px 20px rgba(255, 143, 0, 0.2);
 }
+
+/* Campos de quantidade por tamanho (grade de camisetas) */
+.input-tam-camisa {
+    width: 62px;
+    text-align: center;
+    padding: 8px 6px;
+    font-size: 1rem;
+    font-weight: 700;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.input-tam-camisa::-webkit-outer-spin-button,
+.input-tam-camisa::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
