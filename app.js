@@ -2145,24 +2145,32 @@ function gerarPDFComLogo(logoBase64) {
         checkPage(30);
         titulo('VENDA DE CAMISETAS');
         const TIPO_LBL = { trabalhador: 'Trabalhador', publico: 'Público' };
+        // Agrupado por nome+tipo+tamanho+status (mesma lógica da tela)
+        const gruposCamis = (typeof agruparCamisetas === 'function') ? agruparCamisetas(camisetasPDF) : camisetasPDF.map(c => ({ ...c, qtd: 1 }));
         doc.autoTable({
             startY: y, theme: 'grid',
             headStyles: { fillColor: [91, 192, 235], textColor: [255,255,255], fontSize: 8 },
             bodyStyles: { fontSize: 7 },
             styles: { overflow: 'linebreak', cellPadding: 2 },
-            head: [['Nome', 'Telefone', 'Tipo', 'Modelagem', 'Tam.', 'Valor', 'Status']],
-            body: [...camisetasPDF].sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(c => [
-                c.nome || '-', c.telefone || '-', TIPO_LBL[c.tipo] || c.tipo,
-                c.modelagem || '-', c.tamanho || '-',
-                (c.valor||0) > 0 ? 'R$ ' + fmt(c.valor) : '-',
-                c.pago ? 'Pago' : 'Pendente'
-            ])
+            head: [['Nome', 'Telefone', 'Tipo', 'Tam.', 'Qtd', 'Valor', 'Status']],
+            body: gruposCamis.map(g => {
+                const total = (g.valor||0) * (g.qtd||1);
+                return [
+                    g.nome || '-', g.telefone || '-', TIPO_LBL[g.tipo] || g.tipo,
+                    g.tamanho || '-', String(g.qtd||1),
+                    total > 0 ? 'R$ ' + fmt(total) : '-',
+                    g.pago ? 'Pago' : 'Pendente'
+                ];
+            })
         });
         y = doc.lastAutoTable.finalY + 5;
         const totCamis = camisetasPDF.reduce((s,c)=>s+(c.valor||0),0);
         const totCamisPagas = camisetasPDF.filter(c=>c.pago).reduce((s,c)=>s+(c.valor||0),0);
+        const totCustoCamis = (typeof custoPorTipoCamisa === 'function') ? camisetasPDF.reduce((s,c)=>s+custoPorTipoCamisa(c.tipo),0) : 0;
+        const lucroCamis = totCamis - totCustoCamis;
         doc.setFontSize(9); doc.setTextColor(80);
-        doc.text(`Total: ${camisetasPDF.length} camisetas | Valor total: R$ ${fmt(totCamis)} | Recebido: R$ ${fmt(totCamisPagas)} | A receber: R$ ${fmt(totCamis - totCamisPagas)}`, 14, y);
+        doc.text(`Total: ${camisetasPDF.length} camisetas | Valor (venda): R$ ${fmt(totCamis)} | Recebido: R$ ${fmt(totCamisPagas)} | A receber: R$ ${fmt(totCamis - totCamisPagas)}`, 14, y); y += 5;
+        doc.text(`Custo total: R$ ${fmt(totCustoCamis)} | Lucro estimado: R$ ${fmt(lucroCamis)}`, 14, y);
         y += 15;
     }
 
