@@ -1361,6 +1361,113 @@ function renderizarTudo() {
     renderizarDoacoesEntrada();
     renderizarCaixas();
     renderizarCamisetas();
+    renderizarAReceber();
+}
+
+// ===== A RECEBER / A PAGAR (consolidado) =====
+function renderizarAReceber() {
+    const resumoEl = document.getElementById('resumoAReceber');
+    const listaEl = document.getElementById('listaAReceber');
+    if (!listaEl) return;
+    const hoje = new Date().toISOString().split('T')[0];
+
+    // 1) Camisetas não pagas (agrupadas)
+    const camisPend = (dados.camisetas || []).filter(c => !c.pago && (c.valor || 0) > 0);
+    const totalCamis = camisPend.reduce((s, c) => s + (c.valor || 0), 0);
+
+    // 2) Patrocínio em dinheiro não recebido
+    const patrPend = (dados.patrocinadores || []).filter(p => (p.tipo || 'dinheiro') === 'dinheiro' && !p.recebido);
+    const totalPatr = patrPend.reduce((s, p) => s + (p.valor || 0), 0);
+
+    // 3) Doações em dinheiro não recebidas
+    const doacPend = (dados.doacoesEntrada || []).filter(d => !d.recebido);
+    const totalDoac = doacPend.reduce((s, d) => s + (d.valor || 0), 0);
+
+    // 4) Despesas a pagar (não pagas, que não são doação)
+    const despPend = (dados.despesas || []).filter(d => !d.pago && !d.doacao);
+    const totalDesp = despPend.reduce((s, d) => s + (d.valor || 0), 0);
+
+    const totalReceber = totalCamis + totalPatr + totalDoac;
+
+    if (resumoEl) {
+        resumoEl.innerHTML = `
+            <div class="item positivo"><span>Total a Receber</span><strong>${R$(totalReceber)}</strong></div>
+            <div class="item neutro"><span>👕 Camisetas</span><strong>${R$(totalCamis)}</strong></div>
+            <div class="item neutro"><span>🤝 Patrocínios</span><strong>${R$(totalPatr)}</strong></div>
+            <div class="item neutro"><span>💰 Doações</span><strong>${R$(totalDoac)}</strong></div>
+            <div class="item negativo"><span>🧾 A Pagar (despesas)</span><strong>${R$(totalDesp)}</strong></div>
+        `;
+    }
+
+    let html = '';
+
+    // ---- A RECEBER ----
+    // Camisetas
+    if (camisPend.length > 0) {
+        const grupos = (typeof agruparCamisetas === 'function') ? agruparCamisetas(camisPend) : camisPend.map(c => ({ ...c, qtd: 1 }));
+        html += `<div class="tabela-box" style="margin-bottom:12px">
+            <h4>👕 Camisetas a receber — ${R$(totalCamis)}</h4>
+            <table><thead><tr><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Tam.</th><th>Qtd</th><th>Valor</th></tr></thead><tbody>`;
+        grupos.forEach(g => {
+            html += `<tr>
+                <td style="font-weight:700">${g.nome}</td><td>${g.telefone || '-'}</td>
+                <td>${g.tipo === 'trabalhador' ? 'Trabalhador' : 'Público'}</td>
+                <td>${g.tamanho}</td><td style="text-align:center">${g.qtd}</td>
+                <td>${R$((g.valor || 0) * g.qtd)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // Patrocínios
+    if (patrPend.length > 0) {
+        html += `<div class="tabela-box" style="margin-bottom:12px">
+            <h4>🤝 Patrocínios a receber — ${R$(totalPatr)}</h4>
+            <table><thead><tr><th>Patrocinador</th><th>Valor</th><th>Descrição</th></tr></thead><tbody>`;
+        patrPend.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(p => {
+            html += `<tr><td style="font-weight:700">${p.nome}</td><td>${R$(p.valor || 0)}</td><td>${p.desc || p.obs || '-'}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // Doações em dinheiro
+    if (doacPend.length > 0) {
+        html += `<div class="tabela-box" style="margin-bottom:12px">
+            <h4>💰 Doações em dinheiro a receber — ${R$(totalDoac)}</h4>
+            <table><thead><tr><th>Doador</th><th>Valor</th><th>Obs</th></tr></thead><tbody>`;
+        doacPend.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(d => {
+            html += `<tr><td style="font-weight:700">${d.nome || '-'}</td><td>${R$(d.valor || 0)}</td><td>${d.obs || '-'}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // ---- A PAGAR ----
+    if (despPend.length > 0) {
+        const ordenadas = [...despPend].sort((a, b) => {
+            if (!a.dataVencimento && !b.dataVencimento) return 0;
+            if (!a.dataVencimento) return 1;
+            if (!b.dataVencimento) return -1;
+            return a.dataVencimento.localeCompare(b.dataVencimento);
+        });
+        html += `<div class="tabela-box" style="margin-bottom:12px">
+            <h4>🧾 Despesas a pagar — ${R$(totalDesp)}</h4>
+            <table><thead><tr><th>Descrição</th><th>Valor</th><th>Destino</th><th>Vencimento</th></tr></thead><tbody>`;
+        ordenadas.forEach(d => {
+            const dest = d.destino === 'geral' ? 'Geral' : (NOMES_BARRACAS[d.destino] || d.destino || '-');
+            let venc = '-';
+            if (d.dataVencimento) {
+                const fmtV = d.dataVencimento.split('-').reverse().join('/');
+                if (d.dataVencimento < hoje) venc = `<span style="color:#ef5350;font-weight:700">⚠️ Vencido ${fmtV}</span>`;
+                else if (d.dataVencimento === hoje) venc = `<span style="color:#ffb300;font-weight:700">⏰ Hoje</span>`;
+                else venc = fmtV;
+            }
+            html += `<tr><td style="font-weight:700">${d.desc || '-'}</td><td>${R$(d.valor || 0)}</td><td>${dest}</td><td>${venc}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    if (!html) html = '<p style="opacity:0.5;text-align:center;padding:20px">Nada pendente. Tudo em dia! 🎉</p>';
+    listaEl.innerHTML = html;
 }
 
 // ===== MODAL DE EDIÇÃO =====
