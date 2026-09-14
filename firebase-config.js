@@ -27,8 +27,8 @@ const dbRef = db.ref('padroeira');
 // fbAdicionarItem/fbGravarCampo, para não desfazer o formato chaveado por id (que evita
 // duplicação e perda). Aqui gravamos só vendas de barraca, config e meta.
 const CAMPOS_ITEM_A_ITEM_FB = ['patrocinadores', 'despesas', 'doacoesEntrada', 'doadores', 'necessidades', 'caixas', 'camisetas'];
-// Nós que NUNCA devem ser tocados por um update de dados (lixeira e edição anterior)
-const CAMPOS_PROTEGIDOS_FB = ['lixeira', 'edicao_anterior'];
+// Nós que NUNCA devem ser tocados por um update de dados (lixeira, edição anterior, backups, usuários)
+const CAMPOS_PROTEGIDOS_FB = ['lixeira', 'edicao_anterior', 'backups', 'usuarios'];
 
 function salvarFirebase(dados) {
     // Converter para JSON e voltar para limpar undefined/funções
@@ -143,4 +143,88 @@ function fbRestaurarLixeira(chave) {
 // Apaga um registro da lixeira definitivamente
 function fbExcluirLixeira(chave) {
     return dbRef.child('lixeira').child(chave).remove().catch(err => console.error('Erro ao excluir da lixeira:', err));
+}
+
+// ===== BACKUP AUTOMÁTICO DIÁRIO =====
+// Grava uma cópia COMPLETA dos dados (incluindo os campos item-a-item) num nó
+// 'backups/AAAA-MM-DD'. Roda 1x por dia, na primeira abertura após as 10h.
+// Mantém os últimos 30 backups (apaga os mais antigos).
+
+const BACKUP_HORA_MINIMA = 10; // só faz backup a partir das 10h
+const BACKUP_MAX = 30;         // quantos backups manter
+
+function dataHojeISO() {
+    // AAAA-MM-DD no fuso local
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+// Lê o nó 'padroeira' inteiro e grava como backup do dia (se ainda não existir hoje e já passou das 10h)
+function fbBackupDiarioSeNecessario() {
+    try {
+        if (new Date().getHours() < BACKUP_HORA_MINIMA) return; // ainda não deu a hora
+        const hoje = dataHojeISO();
+        dbRef.child('backups').child(hoje).child('criadoEm').once('value').then(snap => {
+            if (snap.exists()) return; // já tem backup de hoje
+            // Copia os dados operacionais (sem incluir os próprios backups/lixeira p/ não inchar)
+            dbRef.once('value').then(all => {
+                const dados = all.val() || {};
+                const copia = {};
+                Object.keys(dados).forEach(k => {
+                    if (k === 'backups' || k === 'lixeira') return; // não duplica esses nós
+                    copia[k] = dados[k];
+                });
+                const registro = { criadoEm: new Date().toISOString(), dados: copia };
+                dbRef.child('backups').child(hoje).set(registro).then(() => {
+                    limparBackupsAntigos();
+                }).catch(err => console.error('Erro ao gravar backup:', err));
+            });
+        });
+    } catch (e) { console.error('Backup falhou:', e); }
+}
+
+function limparBackupsAntigos() {
+    dbRef.child('backups').once('value').then(snap => {
+        const val = snap.val() || {};
+        const chaves = Object.keys(val).sort(); // AAAA-MM-DD ordena cronologicamente
+        if (chaves.length <= BACKUP_MAX) return;
+        const remover = chaves.slice(0, chaves.length - BACKUP_MAX);
+        remover.forEach(k => dbRef.child('backups').child(k).remove());
+    }).catch(() => {});
+}
+
+// Lista os backups disponíveis (mais recentes primeiro): [{ data, criadoEm }]
+function fbListarBackups() {
+    return dbRef.child('backups').once('value').then(snap => {
+        const val = snap.val() || {};
+        return Object.keys(val).map(k => ({ data: k, criadoEm: val[k].criadoEm || '' }))
+            .sort((a, b) => b.data.localeCompare(a.data));
+    }).catch(() => []);
+}
+
+// Restaura um backup: sobrescreve o nó padroeira com os dados salvos.
+// Antes de restaurar, gera um backup de segurança do estado atual.
+function fbRestaurarBackup(data) {
+    return dbRef.child('backups').child(data).once('value').then(snap => {
+        const reg = snap.val();
+        if (!reg || !reg.dados) return false;
+        // salva um "antes-da-restauracao" pra não perder o estado atual
+        return dbRef.once('value').then(all => {
+            const atual = all.val() || {};
+            const copia = {};
+            Object.keys(atual).forEach(k => { if (k !== 'backups' && k !== 'lixeira') copia[k] = atual[k]; });
+            const chaveSeg = 'antes-restauracao-' + Date.now();
+            return dbRef.child('backups').child(chaveSeg).set({ criadoEm: new Date().toISOString(), dados: copia }).then(() => {
+                // Restaura cada campo do backup (set em cada chave do backup)
+                const promessas = Object.keys(reg.dados).map(k => dbRef.child(k).set(reg.dados[k]));
+                return Promise.all(promessas).then(() => true);
+            });
+        });
+    }).catch(err => { console.error('Erro ao restaurar backup:', err); return false; });
+}
+
+function fbExcluirBackup(data) {
+    return dbRef.child('backups').child(data).remove().catch(err => console.error('Erro ao excluir backup:', err));
 }

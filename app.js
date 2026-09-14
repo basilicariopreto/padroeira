@@ -262,6 +262,8 @@ if (typeof carregarFirebase === 'function') {
         } else {
             salvarFirebase(dados);
         }
+        // Backup automático diário (só roda após as 10h e 1x por dia)
+        if (typeof fbBackupDiarioSeNecessario === 'function') fbBackupDiarioSeNecessario();
     }).catch(err => console.log('Firebase offline, usando localStorage'));
 }
 
@@ -2444,6 +2446,53 @@ function excluirLixeira(chave) {
     if (!confirm('Apagar este item da lixeira definitivamente? Não poderá mais recuperar.')) return;
     if (typeof fbExcluirLixeira !== 'function') return;
     fbExcluirLixeira(chave).then(() => { mostrarToast('Item removido da lixeira'); setTimeout(abrirLixeira, 300); });
+}
+
+// ===== BACKUPS (UI) =====
+function abrirBackups() {
+    const el = document.getElementById('backupsLista');
+    if (!el) return;
+    el.innerHTML = '<p style="opacity:0.6">Carregando...</p>';
+    if (typeof fbListarBackups !== 'function') { el.innerHTML = '<p style="opacity:0.6">Backup indisponível.</p>'; return; }
+    fbListarBackups().then(lista => {
+        if (!lista || lista.length === 0) { el.innerHTML = '<p style="opacity:0.6">Nenhum backup ainda. O primeiro é gerado automaticamente após as 10h.</p>'; return; }
+        let html = '<div class="tabela-box"><table><thead><tr><th>Data</th><th>Gerado em</th><th></th></tr></thead><tbody>';
+        lista.forEach(b => {
+            const ehSeguranca = b.data.indexOf('antes-restauracao-') === 0;
+            const dataFmt = ehSeguranca ? 'Segurança (antes de restaurar)' : b.data.split('-').reverse().join('/');
+            const quando = b.criadoEm ? new Date(b.criadoEm).toLocaleString('pt-BR') : '-';
+            html += `<tr>
+                <td style="font-weight:700">${dataFmt}</td>
+                <td style="font-size:0.8rem;opacity:0.8">${quando}</td>
+                <td style="white-space:nowrap">
+                    <button class="btn-venda" style="padding:3px 8px" onclick="restaurarBackup('${b.data}')" title="Restaurar este dia">↩️ Restaurar</button>
+                    <button class="btn-delete" onclick="excluirBackup('${b.data}')" title="Apagar backup">X</button>
+                </td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        el.innerHTML = html;
+    });
+}
+
+function restaurarBackup(data) {
+    if (!confirm(`Restaurar o backup de ${data.split('-').reverse().join('/')}?\n\nISSO VAI SUBSTITUIR os dados atuais pelos do backup. Um backup de segurança do estado atual será criado automaticamente antes. Continuar?`)) return;
+    if (typeof fbRestaurarBackup !== 'function') return;
+    mostrarToast('Restaurando backup...');
+    fbRestaurarBackup(data).then(ok => {
+        if (ok) {
+            mostrarToast('✅ Backup restaurado! Recarregando...');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            alert('Não foi possível restaurar este backup.');
+        }
+    });
+}
+
+function excluirBackup(data) {
+    if (!confirm('Apagar este backup definitivamente?')) return;
+    if (typeof fbExcluirBackup !== 'function') return;
+    fbExcluirBackup(data).then(() => { mostrarToast('Backup removido'); setTimeout(abrirBackups, 300); });
 }
 
 // Carregar config dinâmica ao iniciar
