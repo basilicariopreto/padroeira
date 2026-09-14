@@ -8,6 +8,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#12376e">
+    <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
     <style>
         .sub-nav { display:flex; justify-content:center; gap:8px; padding:12px; flex-wrap:wrap; }
         .sub-nav button { background: var(--cor-madeira); border: 2px solid var(--cor-madeira-clara); color: var(--cor-palha); padding: 8px 18px; border-radius: 20px; cursor: pointer; font-size: 0.85rem; font-weight: 600; font-family: 'Nunito', sans-serif; }
