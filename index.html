@@ -907,6 +907,16 @@
                 </div>
             </div>
 
+            <!-- Estoque disponível por tamanho -->
+            <div class="painel-madeira" style="margin-bottom:15px">
+                <h3>Estoque disponível por tamanho</h3>
+                <p class="secao-desc">Defina quantas camisetas há de cada tamanho. Deixe 0 (ou vazio) se não quiser controlar aquele tamanho. Ao esgotar, o sistema bloqueia a venda daquele tamanho.</p>
+                <div class="form-row" id="estoqueCamisetasInputs" style="flex-wrap:wrap;gap:10px"></div>
+                <div class="form-row">
+                    <button class="btn-venda" onclick="salvarConfigCamisetas()">Salvar Estoque</button>
+                </div>
+            </div>
+
             <!-- Registrar venda -->
             <div class="painel-madeira">
                 <h3>Registrar Venda</h3>
@@ -920,11 +930,7 @@
                         <option value="trabalhador">Trabalhador</option>
                         <option value="publico">Público em geral</option>
                     </select>
-                    <select id="camisaModelagem" onchange="atualizarTamanhosCamiseta()">
-                        <option value="">Modelagem...</option>
-                        <option value="Baby Look">Baby Look</option>
-                        <option value="Casual">Casual</option>
-                    </select>
+                    <input type="hidden" id="camisaModelagem" value="Casual">
                     <select id="camisaTamanho" style="min-width:220px">
                         <option value="">Tamanho...</option>
                     </select>

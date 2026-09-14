@@ -7,17 +7,27 @@ function precoPorTipo(tipo) {
     return tipo === 'trabalhador' ? (cfg.precoTrabalhador || 0) : (cfg.precoPublico || 0);
 }
 
+function contarVendidasPorTamanho(tamanho) {
+    return (dados.camisetas || []).filter(c => c.tamanho === tamanho).length;
+}
+
 function atualizarTamanhosCamiseta() {
-    const modelagem = document.getElementById('camisaModelagem').value;
     const sel = document.getElementById('camisaTamanho');
     if (!sel) return;
-    if (!modelagem || !TAMANHOS_CAMISETA[modelagem]) {
-        sel.innerHTML = '<option value="">Tamanho...</option>';
-        return;
-    }
-    sel.innerHTML = '<option value="">Tamanho...</option>' + TAMANHOS_CAMISETA[modelagem].map(x =>
-        `<option value="${x.t}">${x.t} (${x.ref})</option>`
-    ).join('');
+    const estoque = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
+    const temEstoque = Object.values(estoque).some(v => (v || 0) > 0);
+    sel.innerHTML = '<option value="">Tamanho...</option>' + (TAMANHOS_CAMISETA['Casual'] || []).map(x => {
+        const disp = estoque[x.t] || 0;
+        const vend = contarVendidasPorTamanho(x.t);
+        const restante = disp - vend;
+        let sufixo = ` (${x.ref})`;
+        let disabled = '';
+        if (temEstoque && disp > 0) {
+            sufixo = ` — ${restante > 0 ? restante + ' disp.' : 'ESGOTADO'}`;
+            if (restante <= 0) disabled = ' disabled';
+        }
+        return `<option value="${x.t}"${disabled}>${x.t}${sufixo}</option>`;
+    }).join('');
 }
 
 function atualizarPrecoCamiseta() {
@@ -39,19 +49,28 @@ function registrarCamiseta() {
 
     if (!nome) { alert('Preencha o nome da pessoa'); return; }
     if (!tipo) { alert('Selecione o tipo de comprador'); return; }
-    if (!modelagem) { alert('Selecione a modelagem'); return; }
     if (!tamanho) { alert('Selecione o tamanho'); return; }
+
+    // Checagem de estoque por tamanho (se configurado)
+    const estoque = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
+    const disp = estoque[tamanho] || 0;
+    if (disp > 0) {
+        const vend = contarVendidasPorTamanho(tamanho);
+        if (vend >= disp) {
+            alert(`Estoque esgotado para o tamanho ${tamanho}!\nDisponível: ${disp} | Já registradas: ${vend}`);
+            return;
+        }
+    }
 
     // valor é registrado no momento (snapshot do preço configurado). Se ainda não tem preço, fica 0.
     const valor = precoPorTipo(tipo);
 
-    adicionarItem('camisetas', { id: Date.now(), nome, telefone, tipo, modelagem, tamanho, valor, pago });
+    adicionarItem('camisetas', { id: Date.now(), nome, telefone, tipo, modelagem: modelagem || 'Casual', tamanho, valor, pago });
 
     document.getElementById('camisaNome').value = '';
     document.getElementById('camisaTelefone').value = '';
     document.getElementById('camisaTipo').value = '';
-    document.getElementById('camisaModelagem').value = '';
-    document.getElementById('camisaTamanho').innerHTML = '<option value="">Tamanho...</option>';
+    document.getElementById('camisaTamanho').value = '';
     document.getElementById('camisaPago').checked = true;
     document.getElementById('camisaPrecoInfo').textContent = '';
 
@@ -76,7 +95,7 @@ function editarCamiseta(id) {
     const item = (dados.camisetas || []).find(c => String(c.id) === String(id));
     if (!item) return;
     edicaoCamisaId = id;
-    const tamOpts = (m, sel) => (TAMANHOS_CAMISETA[m] || []).map(x =>
+    const tamOpts = (sel) => (TAMANHOS_CAMISETA['Casual'] || []).map(x =>
         `<option value="${x.t}" ${x.t === sel ? 'selected' : ''}>${x.t} (${x.ref})</option>`).join('');
     document.getElementById('modalConteudo').innerHTML = `
         <div class="campo"><label>Nome</label><input type="text" id="editNome" value="${item.nome}"></div>
@@ -87,14 +106,9 @@ function editarCamiseta(id) {
                 <option value="publico" ${item.tipo==='publico'?'selected':''}>Público em geral</option>
             </select>
         </div>
-        <div class="campo"><label>Modelagem</label>
-            <select id="editModelagem" onchange="atualizarTamanhoEdit()">
-                <option value="Baby Look" ${item.modelagem==='Baby Look'?'selected':''}>Baby Look</option>
-                <option value="Casual" ${item.modelagem==='Casual'?'selected':''}>Casual</option>
-            </select>
-        </div>
+        <input type="hidden" id="editModelagem" value="Casual">
         <div class="campo"><label>Tamanho</label>
-            <select id="editTamanho">${tamOpts(item.modelagem, item.tamanho)}</select>
+            <select id="editTamanho">${tamOpts(item.tamanho)}</select>
         </div>
     `;
     document.getElementById('modalTitulo').textContent = 'Editar Venda de Camiseta';
@@ -102,9 +116,8 @@ function editarCamiseta(id) {
 }
 
 function atualizarTamanhoEdit() {
-    const m = document.getElementById('editModelagem').value;
     const sel = document.getElementById('editTamanho');
-    if (sel) sel.innerHTML = (TAMANHOS_CAMISETA[m] || []).map(x => `<option value="${x.t}">${x.t} (${x.ref})</option>`).join('');
+    if (sel) sel.innerHTML = (TAMANHOS_CAMISETA['Casual'] || []).map(x => `<option value="${x.t}">${x.t} (${x.ref})</option>`).join('');
 }
 
 function salvarEdicaoCamiseta() {
@@ -174,32 +187,40 @@ function renderizarPagina() {
     const contador = document.getElementById('contadorRegistros');
     if (contador) contador.textContent = todas.length > 0 ? `(${todas.length} vendida${todas.length>1?'s':''})` : '';
 
+    atualizarTamanhosCamiseta();
     renderizarQtdPorTamanho();
 }
 
-// Quantidade vendida por tamanho (separado por modelagem)
+// Quantidade por tamanho (vendidas / disponíveis)
 function renderizarQtdPorTamanho() {
     const el = document.getElementById('camisetasPorTamanho');
     if (!el) return;
     const todas = dados.camisetas || [];
-    if (todas.length === 0) { el.innerHTML = ''; return; }
+    const estoque = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
+    const temEstoqueConfig = Object.values(estoque).some(v => (v || 0) > 0);
 
-    let html = '';
-    ['Baby Look', 'Casual'].forEach(modelagem => {
-        const daModelagem = todas.filter(c => c.modelagem === modelagem);
-        if (daModelagem.length === 0) return;
-        const ordem = (TAMANHOS_CAMISETA[modelagem] || []).map(x => x.t);
-        const contagem = {};
-        daModelagem.forEach(c => { contagem[c.tamanho] = (contagem[c.tamanho] || 0) + 1; });
-        const tamanhosPresentes = ordem.filter(t => contagem[t]);
-        html += `<div class="tabela-box" style="margin-bottom:12px">
-            <h4>${modelagem} — ${daModelagem.length} camiseta${daModelagem.length>1?'s':''}</h4>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">`;
-        tamanhosPresentes.forEach(t => {
-            html += `<span style="background:rgba(91,192,235,0.15);border:1px solid rgba(91,192,235,0.4);border-radius:8px;padding:6px 12px;font-size:0.9rem"><strong style="color:var(--cor-amarelo)">${t}</strong>: ${contagem[t]}</span>`;
-        });
-        html += '</div></div>';
+    const contagem = {};
+    todas.forEach(c => { contagem[c.tamanho] = (contagem[c.tamanho] || 0) + 1; });
+
+    if (todas.length === 0 && !temEstoqueConfig) { el.innerHTML = ''; return; }
+
+    let html = `<div class="tabela-box" style="margin-bottom:12px">
+        <h4>Camisetas por tamanho${temEstoqueConfig ? ' (vendidas / disponíveis)' : ''} — ${todas.length} no total</h4>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    TAMANHOS_LISTA.forEach(t => {
+        const vend = contagem[t] || 0;
+        const disp = estoque[t] || 0;
+        if (!temEstoqueConfig && vend === 0) return;
+        let cor = 'rgba(91,192,235,0.15)', borda = 'rgba(91,192,235,0.4)', extra = '';
+        if (temEstoqueConfig) {
+            const restante = disp - vend;
+            if (disp > 0 && restante <= 0) { cor = 'rgba(239,83,80,0.18)'; borda = 'rgba(239,83,80,0.5)'; extra = ' ESGOTADO'; }
+            else if (disp > 0 && restante <= 2) { cor = 'rgba(255,179,0,0.18)'; borda = 'rgba(255,179,0,0.5)'; }
+        }
+        const label = temEstoqueConfig ? `${vend}/${disp}${extra}` : `${vend}`;
+        html += `<span style="background:${cor};border:1px solid ${borda};border-radius:8px;padding:6px 12px;font-size:0.9rem"><strong style="color:var(--cor-amarelo)">${t}</strong>: ${label}</span>`;
     });
+    html += '</div></div>';
     el.innerHTML = html;
 }
 

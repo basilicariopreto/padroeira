@@ -33,19 +33,6 @@ const STORAGE_KEY = 'padroeira_financeiro_v1';
 
 // Tamanhos das camisetas (com tórax/altura de referência)
 const TAMANHOS_CAMISETA = {
-    'Baby Look': [
-        { t: '3P', ref: 'Tórax 40 / Altura 51' },
-        { t: 'PP', ref: 'Tórax 42 / Altura 53' },
-        { t: 'P', ref: 'Tórax 44 / Altura 55' },
-        { t: 'M', ref: 'Tórax 46 / Altura 57' },
-        { t: 'G', ref: 'Tórax 48 / Altura 59' },
-        { t: 'GG', ref: 'Tórax 50 / Altura 61' },
-        { t: '3G', ref: 'Tórax 52 / Altura 63' },
-        { t: '4G', ref: 'Tórax 50 / Altura 65' },
-        { t: '5G', ref: 'Tórax 57 / Altura 67' },
-        { t: '6G', ref: 'Tórax 59 / Altura 69' },
-        { t: '7G', ref: 'Tórax 61 / Altura 69' }
-    ],
     'Casual': [
         { t: '3P', ref: 'Tórax 44 / Altura 63' },
         { t: 'PP', ref: 'Tórax 46 / Altura 64' },
@@ -60,6 +47,8 @@ const TAMANHOS_CAMISETA = {
         { t: '7G', ref: 'Tórax 64 / Altura 78' }
     ]
 };
+// Lista simples de tamanhos (ordem) — usada para estoque e contagem
+const TAMANHOS_LISTA = TAMANHOS_CAMISETA['Casual'].map(x => x.t);
 
 function fmt(valor) {
     const n = Number(valor);
@@ -78,7 +67,7 @@ function mostrarToast(msg, tipo) {
 }
 
 function dadosVazios() {
-    const d = { despesas: [], patrocinadores: [], doadores: [], necessidades: [], doacoesEntrada: [], caixas: [], camisetas: [], configCaixas: { fixos: 0, volantes: 0 }, configCamisetas: { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0 }, meta: 0, configBarracas: null, configProdutos: null };
+    const d = { despesas: [], patrocinadores: [], doadores: [], necessidades: [], doacoesEntrada: [], caixas: [], camisetas: [], configCaixas: { fixos: 0, volantes: 0 }, configCamisetas: { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, estoque: {} }, meta: 0, configBarracas: null, configProdutos: null };
     BARRACAS.forEach(b => { d[b] = { vendas: [] }; });
     return d;
 }
@@ -137,7 +126,10 @@ function normalizarDados(d) {
 
     if (d.camisetas && !Array.isArray(d.camisetas)) d.camisetas = Object.values(d.camisetas);
     if (!d.camisetas) d.camisetas = [];
+    // Migração: camisetas antigas "Baby Look" viram "Casual" (mantém o tamanho)
+    d.camisetas.forEach(c => { if (c.modelagem === 'Baby Look') c.modelagem = 'Casual'; if (!c.modelagem) c.modelagem = 'Casual'; });
     if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0 };
+    if (!d.configCamisetas.estoque || typeof d.configCamisetas.estoque !== 'object') d.configCamisetas.estoque = {};
 
     // Garantir que todos os ids sejam NÚMERO (Firebase converte chaves para string)
     ['patrocinadores','despesas','doadores','necessidades','doacoesEntrada','caixas','camisetas'].forEach(campo => {
