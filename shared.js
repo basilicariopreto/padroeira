@@ -50,6 +50,20 @@ const TAMANHOS_CAMISETA = {
 // Lista simples de tamanhos (ordem) — usada para estoque e contagem
 const TAMANHOS_LISTA = TAMANHOS_CAMISETA['Casual'].map(x => x.t);
 
+// Garante o formato do estoque: { trabalhador: {tam: qtd}, publico: {tam: qtd} }
+function normalizarEstoqueCamisetas(cfg) {
+    if (!cfg) return;
+    const antigo = cfg.estoque;
+    const ehNovoFormato = antigo && typeof antigo === 'object' && (antigo.trabalhador || antigo.publico);
+    if (!ehNovoFormato) {
+        const plano = (antigo && typeof antigo === 'object') ? antigo : {};
+        cfg.estoque = { trabalhador: {}, publico: {} };
+        Object.keys(plano).forEach(t => { cfg.estoque.publico[t] = plano[t] || 0; });
+    }
+    if (!cfg.estoque.trabalhador) cfg.estoque.trabalhador = {};
+    if (!cfg.estoque.publico) cfg.estoque.publico = {};
+}
+
 function fmt(valor) {
     const n = Number(valor);
     return (isNaN(n) ? 0 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -129,7 +143,7 @@ function normalizarDados(d) {
     // Migração: camisetas antigas "Baby Look" viram "Casual" (mantém o tamanho)
     d.camisetas.forEach(c => { if (c.modelagem === 'Baby Look') c.modelagem = 'Casual'; if (!c.modelagem) c.modelagem = 'Casual'; });
     if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0 };
-    if (!d.configCamisetas.estoque || typeof d.configCamisetas.estoque !== 'object') d.configCamisetas.estoque = {};
+    normalizarEstoqueCamisetas(d.configCamisetas);
 
     // Garantir que todos os ids sejam NÚMERO (Firebase converte chaves para string)
     ['patrocinadores','despesas','doadores','necessidades','doacoesEntrada','caixas','camisetas'].forEach(campo => {

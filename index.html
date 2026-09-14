@@ -910,8 +910,8 @@
             <!-- Estoque disponível por tamanho -->
             <div class="painel-madeira" style="margin-bottom:15px">
                 <h3>Estoque disponível por tamanho</h3>
-                <p class="secao-desc">Defina quantas camisetas há de cada tamanho. Deixe 0 (ou vazio) se não quiser controlar aquele tamanho. Ao esgotar, o sistema bloqueia a venda daquele tamanho.</p>
-                <div class="form-row" id="estoqueCamisetasInputs" style="flex-wrap:wrap;gap:10px"></div>
+                <p class="secao-desc">Defina quantas camisetas há de cada tamanho, separado por Trabalhador e Público. Deixe 0 (ou vazio) se não quiser controlar. Por enquanto a venda NÃO é bloqueada ao esgotar — o quadro apenas mostra a quantidade (ficando negativa se passar). Mais perto da festa dá pra ativar o bloqueio.</p>
+                <div id="estoqueCamisetasInputs"></div>
                 <div class="form-row">
                     <button class="btn-venda" onclick="salvarConfigCamisetas()">Salvar Estoque</button>
                 </div>
@@ -934,6 +934,10 @@
                     <select id="camisaTamanho" style="min-width:220px">
                         <option value="">Tamanho...</option>
                     </select>
+                </div>
+                <div class="form-row" id="rowQtdCamisa" style="display:none">
+                    <label style="font-size:0.85rem;color:var(--cor-palha);font-weight:600;white-space:nowrap">Quantidade (grupo trabalhador):</label>
+                    <input type="number" id="camisaQtd" value="1" min="1" style="width:80px">
                 </div>
                 <div class="form-row">
                     <span id="camisaPrecoInfo" style="font-size:0.9rem;color:#81c784;font-weight:700"></span>
