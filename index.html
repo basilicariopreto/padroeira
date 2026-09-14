@@ -10,6 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#12376e">
@@ -134,6 +135,7 @@
             <button class="menu-btn" data-section="caixas">🧑‍💼 Caixas</button>
             <button class="menu-btn" data-section="camisetas">👕 Camisetas</button>
             <button class="menu-btn" data-section="areceber">💰 A Receber/Pagar</button>
+            <button class="menu-btn" data-section="qrcodes">📱 QR Codes</button>
             <button class="menu-btn" data-section="config">⚙️ Config</button>
             <button class="menu-btn" data-section="usuarios" style="display:none">🔑 Usuários</button>
         </div>
@@ -985,6 +987,16 @@
             </div>
             <div class="resumo-barraca" id="resumoCamisetas"></div>
             <div id="camisetasPorTamanho" style="margin-top:15px"></div>
+        </section>
+
+        <!-- QR CODES -->
+        <section id="sec-qrcodes" class="section">
+            <h2>📱 QR Codes das Páginas</h2>
+            <p class="secao-desc">Imprima e distribua para os voluntários. Cada QR abre direto a página da função (caixas, camisetas, doações, etc.), sem precisar digitar link.</p>
+            <div class="form-row" style="padding:10px 0">
+                <button class="btn-export" onclick="imprimirQRCodes()">🖨️ Imprimir todos</button>
+            </div>
+            <div id="qrCodesContainer" style="display:flex;flex-wrap:wrap;gap:18px;justify-content:center"></div>
         </section>
 
         <!-- A RECEBER / A PAGAR -->

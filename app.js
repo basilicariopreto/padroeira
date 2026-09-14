@@ -341,6 +341,8 @@ document.querySelectorAll('.menu-btn').forEach(btn => {
         btn.classList.add('active');
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
         document.getElementById('sec-' + btn.dataset.section).classList.add('active');
+        // Gera os QR codes ao abrir a aba (só a primeira vez)
+        if (btn.dataset.section === 'qrcodes' && typeof gerarQRCodes === 'function') gerarQRCodes();
     });
 });
 
@@ -2710,6 +2712,72 @@ function removerUsuarioPainel(usuario) {
         registrarAcao(`Usuário removido: ${usuario}`);
         renderizarUsuarios();
     });
+}
+
+// ===== QR CODES DAS PÁGINAS =====
+const QR_PAGINAS = [
+    { arq: 'caixas.html', nome: '🧑‍💼 Caixas', desc: 'Cadastro de caixas' },
+    { arq: 'camisetas.html', nome: '👕 Camisetas', desc: 'Venda de camisetas' },
+    { arq: 'doacoes.html', nome: '🎁 Doações', desc: 'Doações de itens' },
+    { arq: 'necessidades.html', nome: '📋 Necessidades', desc: 'Itens necessários' },
+    { arq: 'patrocinios.html', nome: '🤝 Patrocínios', desc: 'Patrocinadores' },
+    { arq: 'painel.html', nome: '📊 Painel (leitura)', desc: 'Consulta geral' }
+];
+
+function urlBaseSite() {
+    // Usa a URL atual como base (funciona em qualquer domínio/pasta)
+    const href = location.href.split('?')[0].split('#')[0];
+    return href.substring(0, href.lastIndexOf('/') + 1);
+}
+
+function gerarQRCodes() {
+    const cont = document.getElementById('qrCodesContainer');
+    if (!cont) return;
+    if (typeof QRCode === 'undefined') {
+        cont.innerHTML = '<p style="opacity:0.6">Biblioteca de QR não carregou. Verifique a conexão e recarregue a página.</p>';
+        return;
+    }
+    if (cont.dataset.gerado === '1') return; // já gerou
+    cont.innerHTML = '';
+    const base = urlBaseSite();
+    QR_PAGINAS.forEach(p => {
+        const url = base + p.arq;
+        const card = document.createElement('div');
+        card.style.cssText = 'background:#fff;color:#12376e;border-radius:12px;padding:16px;text-align:center;width:200px;box-shadow:0 4px 14px rgba(0,0,0,0.25)';
+        card.innerHTML = `<div style="font-weight:800;font-size:0.95rem;margin-bottom:4px">${p.nome}</div>
+            <div style="font-size:0.75rem;opacity:0.7;margin-bottom:10px">${p.desc}</div>
+            <div class="qr-img" style="display:flex;justify-content:center"></div>
+            <div style="font-size:0.65rem;opacity:0.6;margin-top:8px;word-break:break-all">${url}</div>`;
+        cont.appendChild(card);
+        try {
+            new QRCode(card.querySelector('.qr-img'), { text: url, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+        } catch (e) { card.querySelector('.qr-img').textContent = 'erro'; }
+    });
+    cont.dataset.gerado = '1';
+}
+
+function imprimirQRCodes() {
+    gerarQRCodes();
+    const cont = document.getElementById('qrCodesContainer');
+    if (!cont || !cont.innerHTML.trim()) { alert('Aguarde os QR codes carregarem e tente novamente.'); return; }
+    const janela = window.open('', '_blank');
+    if (!janela) { alert('Permita pop-ups para imprimir.'); return; }
+    janela.document.write(`<!DOCTYPE html><html><head><title>QR Codes - Festa da Padroeira</title>
+        <style>
+            body{font-family:Arial,sans-serif;text-align:center;padding:20px}
+            h1{color:#12376e;font-size:20px}
+            .grade{display:flex;flex-wrap:wrap;gap:20px;justify-content:center;margin-top:16px}
+            .cartao{border:1.5px solid #d6aa4a;border-radius:12px;padding:16px;width:230px;page-break-inside:avoid}
+            .cartao b{display:block;color:#12376e;font-size:15px;margin-bottom:2px}
+            .cartao small{color:#555;font-size:11px}
+            .cartao .u{font-size:10px;color:#777;word-break:break-all;margin-top:8px}
+            img,canvas{margin-top:8px}
+        </style></head><body>
+        <h1>FESTA DA PADROEIRA 2026 — Acesso rápido</h1>
+        <div class="grade">${cont.innerHTML.replace(/box-shadow:[^;"]*/g,'')}</div>
+        <script>window.onload=function(){setTimeout(function(){window.print();},400);}<\/script>
+        </body></html>`);
+    janela.document.close();
 }
 
 // Carregar config dinâmica ao iniciar

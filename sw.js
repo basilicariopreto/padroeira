@@ -5,7 +5,7 @@
 // IMPORTANTE: NÃO intercepta chamadas do Firebase (dados) — essas passam direto pela rede,
 // e o próprio Firebase cuida da fila offline/sincronização.
 
-const CACHE = 'padroeira-v1';
+const CACHE = 'padroeira-v2';
 
 // Arquivos do próprio site para funcionar offline
 const ARQUIVOS_LOCAIS = [
@@ -36,7 +36,8 @@ const LIBS_CDN = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',
   'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
-  'https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js'
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js',
+  'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js'
 ];
 
 self.addEventListener('install', event => {
