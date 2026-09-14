@@ -931,13 +931,10 @@
                         <option value="publico">Público em geral</option>
                     </select>
                     <input type="hidden" id="camisaModelagem" value="Casual">
-                    <select id="camisaTamanho" style="min-width:220px">
-                        <option value="">Tamanho...</option>
-                    </select>
                 </div>
-                <div class="form-row" id="rowQtdCamisa" style="display:none">
-                    <label style="font-size:0.85rem;color:var(--cor-palha);font-weight:600;white-space:nowrap">Quantidade (grupo trabalhador):</label>
-                    <input type="number" id="camisaQtd" value="1" min="1" style="width:80px">
+                <div style="margin:6px 0 4px;font-size:0.85rem;color:var(--cor-palha);font-weight:600">Quantidade por tamanho:</div>
+                <div class="form-row" id="gradeTamanhosCamisa" style="flex-wrap:wrap;gap:10px">
+                    <span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>
                 </div>
                 <div class="form-row">
                     <span id="camisaPrecoInfo" style="font-size:0.9rem;color:#81c784;font-weight:700"></span>

@@ -19,36 +19,51 @@ function estoqueDe(tipo, tamanho) {
 }
 
 function atualizarTamanhosCamiseta() {
-    const sel = document.getElementById('camisaTamanho');
-    if (!sel) return;
+    renderizarGradeTamanhosCamisa();
+}
+
+function renderizarGradeTamanhosCamisa() {
+    const grade = document.getElementById('gradeTamanhosCamisa');
+    if (!grade) return;
     const tipo = document.getElementById('camisaTipo') ? document.getElementById('camisaTipo').value : '';
+    if (!tipo) { grade.innerHTML = '<span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>'; return; }
     const est = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
-    const estTipo = (tipo && est[tipo]) ? est[tipo] : {};
+    const estTipo = est[tipo] || {};
     const temEstoque = Object.values(estTipo).some(v => (v || 0) > 0);
-    sel.innerHTML = '<option value="">Tamanho...</option>' + (TAMANHOS_CAMISETA['Casual'] || []).map(x => {
-        const disp = estTipo[x.t] || 0;
-        const vend = tipo ? contarVendidas(tipo, x.t) : 0;
-        const restante = disp - vend;
-        let sufixo = ` (${x.ref})`;
-        let disabled = '';
-        if (temEstoque && disp > 0) {
-            sufixo = ` — ${restante} disp.`;
-            if (BLOQUEAR_ESTOQUE_CAMISETA && restante <= 0) disabled = ' disabled';
+    grade.innerHTML = (TAMANHOS_CAMISETA['Casual'] || []).map(x => {
+        const id = 'gradeTam_' + x.t;
+        const focado = document.activeElement && document.activeElement.id === id;
+        const val = focado ? document.getElementById(id).value : '';
+        let info = '';
+        if (temEstoque) {
+            const disp = estTipo[x.t] || 0;
+            const restante = disp - contarVendidas(tipo, x.t);
+            info = `<div style="font-size:0.68rem;opacity:0.75;margin-top:1px">${restante} disp.</div>`;
         }
-        return `<option value="${x.t}"${disabled}>${x.t}${sufixo}</option>`;
+        return `<div style="text-align:center">
+            <label style="display:block;font-size:0.78rem;color:var(--cor-palha);font-weight:700;margin-bottom:2px">${x.t}</label>
+            <input type="number" id="${id}" value="${val}" min="0" placeholder="0" style="width:52px;text-align:center" oninput="atualizarPrecoCamiseta()">
+            ${info}
+        </div>`;
     }).join('');
 }
 
 function atualizarPrecoCamiseta() {
     const tipo = document.getElementById('camisaTipo').value;
     const info = document.getElementById('camisaPrecoInfo');
-    atualizarTamanhosCamiseta();
-    const rowQtd = document.getElementById('rowQtdCamisa');
-    if (rowQtd) rowQtd.style.display = tipo === 'trabalhador' ? '' : 'none';
+    renderizarGradeTamanhosCamisa();
     if (!info) return;
     if (!tipo) { info.textContent = ''; return; }
     const preco = precoPorTipo(tipo);
-    info.textContent = preco > 0 ? `Valor: ${R$(preco)}` : 'Valor: a definir (configure na página principal)';
+    let total = 0;
+    (TAMANHOS_CAMISETA['Casual'] || []).forEach(x => {
+        const inp = document.getElementById('gradeTam_' + x.t);
+        total += inp ? (parseInt(inp.value) || 0) : 0;
+    });
+    let txt = preco > 0 ? `Valor unitário: ${R$(preco)}` : 'Valor: a definir (configure na página principal)';
+    if (total > 0 && preco > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''} = ${R$(preco * total)}`;
+    else if (total > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''}`;
+    info.textContent = txt;
 }
 
 function registrarCamiseta() {
@@ -56,50 +71,54 @@ function registrarCamiseta() {
     const telefone = document.getElementById('camisaTelefone').value.trim();
     const tipo = document.getElementById('camisaTipo').value;
     const modelagem = document.getElementById('camisaModelagem').value;
-    const tamanho = document.getElementById('camisaTamanho').value;
     const pago = document.getElementById('camisaPago').checked;
-    const qtdInput = document.getElementById('camisaQtd');
-    let qtd = (tipo === 'trabalhador' && qtdInput) ? (parseInt(qtdInput.value) || 1) : 1;
-    if (qtd < 1) qtd = 1;
 
     if (!nome) { alert('Preencha o nome da pessoa'); return; }
     if (!tipo) { alert('Selecione o tipo de comprador'); return; }
-    if (!tamanho) { alert('Selecione o tamanho'); return; }
 
-    // Estoque por tipo + tamanho (avisa se passar; só bloqueia se BLOQUEAR_ESTOQUE_CAMISETA=true)
-    const disp = estoqueDe(tipo, tamanho);
-    if (disp > 0) {
-        const vend = contarVendidas(tipo, tamanho);
-        const restante = disp - vend;
-        if (qtd > restante) {
-            if (BLOQUEAR_ESTOQUE_CAMISETA) {
-                alert(`Estoque insuficiente para ${tamanho} (${tipo}).\nDisponível: ${restante} | Solicitado: ${qtd}`);
-                return;
-            } else {
-                const excedente = qtd - Math.max(0, restante);
-                if (!confirm(`Atenção: isso passa do estoque de ${tamanho} (${tipo}).\nDisponível: ${restante} | Solicitado: ${qtd}\n\nO estoque ficará negativo em ${excedente}. Registrar mesmo assim?`)) return;
-            }
+    const pedidos = [];
+    (TAMANHOS_CAMISETA['Casual'] || []).forEach(x => {
+        const inp = document.getElementById('gradeTam_' + x.t);
+        const q = inp ? (parseInt(inp.value) || 0) : 0;
+        if (q > 0) pedidos.push({ tamanho: x.t, qtd: q });
+    });
+    if (pedidos.length === 0) { alert('Informe a quantidade de pelo menos um tamanho'); return; }
+
+    const avisos = [];
+    pedidos.forEach(p => {
+        const disp = estoqueDe(tipo, p.tamanho);
+        if (disp > 0) {
+            const restante = disp - contarVendidas(tipo, p.tamanho);
+            if (p.qtd > restante) avisos.push(`${p.tamanho}: pedido ${p.qtd}, disponível ${restante}`);
+        }
+    });
+    if (avisos.length > 0) {
+        if (BLOQUEAR_ESTOQUE_CAMISETA) {
+            alert('Estoque insuficiente:\n' + avisos.join('\n'));
+            return;
+        } else {
+            if (!confirm('Atenção: alguns tamanhos passam do estoque (ficarão negativos):\n\n' + avisos.join('\n') + '\n\nRegistrar mesmo assim?')) return;
         }
     }
 
     const valor = precoPorTipo(tipo);
-    for (let i = 0; i < qtd; i++) {
-        const nomeItem = qtd > 1 ? `${nome} (${i + 1}/${qtd})` : nome;
-        adicionarItem('camisetas', { id: Date.now() + i, nome: nomeItem, telefone, tipo, modelagem: modelagem || 'Casual', tamanho, valor, pago });
-    }
+    const totalCriadas = pedidos.reduce((s, p) => s + p.qtd, 0);
+    let base = Date.now();
+    pedidos.forEach(p => {
+        for (let i = 0; i < p.qtd; i++) {
+            adicionarItem('camisetas', { id: base++, nome, telefone, tipo, modelagem: modelagem || 'Casual', tamanho: p.tamanho, valor, pago });
+        }
+    });
 
     document.getElementById('camisaNome').value = '';
     document.getElementById('camisaTelefone').value = '';
     document.getElementById('camisaTipo').value = '';
-    document.getElementById('camisaTamanho').value = '';
-    if (qtdInput) qtdInput.value = '1';
-    const rowQtd = document.getElementById('rowQtdCamisa');
-    if (rowQtd) rowQtd.style.display = 'none';
     document.getElementById('camisaPago').checked = true;
     document.getElementById('camisaPrecoInfo').textContent = '';
+    renderizarGradeTamanhosCamisa();
 
     renderizarPagina();
-    mostrarToast(qtd > 1 ? `✅ ${qtd} camisetas de ${nome} registradas!` : `✅ Camiseta de ${nome} registrada!`);
+    mostrarToast(`✅ ${totalCriadas} camiseta${totalCriadas > 1 ? 's' : ''} de ${nome} registrada${totalCriadas > 1 ? 's' : ''}!`);
 }
 
 function togglePagoCamiseta(id) {
