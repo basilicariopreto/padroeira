@@ -4028,6 +4028,9 @@ function atualizarTamanhosCamiseta() {
 function renderizarGradeTamanhosCamisa() {
     const grade = document.getElementById('gradeTamanhosCamisa');
     if (!grade) return;
+    // Se o usuário está digitando em algum campo da grade, NÃO reconstruir (evita apagar o que foi digitado por um sync do Firebase)
+    const ativo = document.activeElement;
+    if (ativo && ativo.id && ativo.id.indexOf('gradeTam_') === 0) { atualizarTotalCamisa(); return; }
     const tipo = document.getElementById('camisaTipo') ? document.getElementById('camisaTipo').value : '';
     if (!tipo) { grade.innerHTML = '<span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>'; return; }
     const est = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
@@ -4035,8 +4038,6 @@ function renderizarGradeTamanhosCamisa() {
     const temEstoque = Object.values(estTipo).some(v => (v || 0) > 0);
     grade.innerHTML = (TAMANHOS_CAMISETA['Casual'] || []).map(x => {
         const id = 'gradeTam_' + x.t;
-        const focado = document.activeElement && document.activeElement.id === id;
-        const val = focado ? document.getElementById(id).value : '';
         let info = '';
         if (temEstoque) {
             const disp = estTipo[x.t] || 0;
@@ -4045,20 +4046,20 @@ function renderizarGradeTamanhosCamisa() {
         }
         return `<div style="text-align:center">
             <label style="display:block;font-size:0.78rem;color:var(--cor-palha);font-weight:700;margin-bottom:2px">${x.t}</label>
-            <input type="number" id="${id}" value="${val}" min="0" placeholder="0" style="width:52px;text-align:center" oninput="atualizarPrecoCamiseta()">
+            <input type="number" id="${id}" value="" min="0" placeholder="0" style="width:52px;text-align:center" oninput="atualizarTotalCamisa()">
             ${info}
         </div>`;
     }).join('');
+    atualizarTotalCamisa();
 }
 
-function atualizarPrecoCamiseta() {
-    const tipo = document.getElementById('camisaTipo').value;
+// Só recalcula o texto do total (NÃO recria a grade — senão apagaria os outros campos)
+function atualizarTotalCamisa() {
+    const tipo = document.getElementById('camisaTipo') ? document.getElementById('camisaTipo').value : '';
     const info = document.getElementById('camisaPrecoInfo');
-    renderizarGradeTamanhosCamisa();
     if (!info) return;
     if (!tipo) { info.textContent = ''; return; }
     const preco = precoPorTipoCamisa(tipo);
-    // soma total das quantidades digitadas na grade
     let total = 0;
     (TAMANHOS_CAMISETA['Casual'] || []).forEach(x => {
         const inp = document.getElementById('gradeTam_' + x.t);
@@ -4068,6 +4069,11 @@ function atualizarPrecoCamiseta() {
     if (total > 0 && preco > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''} = ${R$(preco * total)}`;
     else if (total > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''}`;
     info.textContent = txt;
+}
+
+// Chamada quando muda o TIPO: reconstrói a grade (limpa quantidades) e recalcula total
+function atualizarPrecoCamiseta() {
+    renderizarGradeTamanhosCamisa();
 }
 
 function registrarCamiseta() {
