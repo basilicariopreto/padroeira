@@ -3518,13 +3518,13 @@ function exportarEscalaPDF() {
     let y = 15;
     const cfg = getConfigEvento();
 
-    // Título
-    doc.setFontSize(16); doc.setTextColor(91, 192, 235);
-    doc.text('ESCALA DE CAIXAS', pageW / 2, y, { align: 'center' }); y += 7;
-    doc.setFontSize(12); doc.setTextColor(0);
-    doc.text(`${cfg.nomeEvento} - Edição ${cfg.edicao}`, pageW / 2, y, { align: 'center' }); y += 6;
-    doc.setFontSize(10);
-    doc.text(cfg.datas, pageW / 2, y, { align: 'center' }); y += 12;
+    // Título (compacto para caber em 1 página)
+    doc.setFontSize(15); doc.setTextColor(91, 192, 235);
+    doc.text('ESCALA DE CAIXAS', pageW / 2, y, { align: 'center' }); y += 6;
+    doc.setFontSize(11); doc.setTextColor(0);
+    doc.text(`${cfg.nomeEvento} - Edição ${cfg.edicao}`, pageW / 2, y, { align: 'center' }); y += 5;
+    doc.setFontSize(9);
+    doc.text(cfg.datas, pageW / 2, y, { align: 'center' }); y += 7;
 
     // Montar dados por dia
     const escalaDias = [1,2,3,4].map(dia => {
@@ -3568,18 +3568,33 @@ function exportarEscalaPDF() {
         ]);
     }
 
+    // Ajuste automático de fonte/espaçamento para caber tudo em UMA página.
+    // Linhas totais = 2 títulos (fixo/volante) + linhas de fixos + linhas de volantes.
+    const totalLinhas = 2 + maxFixos + maxVolantes;
+    let fonte = 9, padding = 3;
+    if (totalLinhas > 22) { fonte = 8; padding = 2; }
+    if (totalLinhas > 28) { fonte = 7.5; padding = 1.6; }
+    if (totalLinhas > 34) { fonte = 7; padding = 1.3; }
+    if (totalLinhas > 42) { fonte = 6.5; padding = 1.1; }
+
+    const pageH = doc.internal.pageSize.getHeight();
+
     doc.autoTable({
         startY: y,
         theme: 'grid',
         head: head,
         body: body,
-        headStyles: { fillColor: [91, 192, 235], textColor: [255, 255, 255], fontSize: 9 },
-        bodyStyles: { fontSize: 9 },
-        columnStyles: { 0: { cellWidth: 12, halign: 'center', fontStyle: 'bold' } },
-        styles: { cellPadding: 3 }
+        headStyles: { fillColor: [91, 192, 235], textColor: [255, 255, 255], fontSize: fonte + 0.5 },
+        bodyStyles: { fontSize: fonte },
+        columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' } },
+        styles: { cellPadding: padding, overflow: 'linebreak' },
+        margin: { bottom: 14 },
+        // Impede que o autotable quebre em várias páginas: usamos rowPageBreak avoid
+        rowPageBreak: 'avoid'
     });
 
-    y = doc.lastAutoTable.finalY + 10;
+    y = doc.lastAutoTable.finalY + 6;
+    if (y > pageH - 8) y = pageH - 8;
     doc.setFontSize(8); doc.setTextColor(100);
     doc.text(`Total: ${dados.caixas.length} pessoas | Fixos: ${dados.caixas.filter(c=>c.tipo==='fixo').length} | Volantes: ${dados.caixas.filter(c=>c.tipo==='volante').length}`, 14, y);
     doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageW - 14, y, { align: 'right' });
