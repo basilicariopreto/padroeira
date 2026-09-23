@@ -3571,13 +3571,19 @@ function exportarEscalaPDF() {
     // Ajuste automático de fonte/espaçamento para caber tudo em UMA página.
     // Linhas totais = 2 títulos (fixo/volante) + linhas de fixos + linhas de volantes.
     const totalLinhas = 2 + maxFixos + maxVolantes;
-    let fonte = 9, padding = 3;
-    if (totalLinhas > 22) { fonte = 8; padding = 2; }
-    if (totalLinhas > 28) { fonte = 7.5; padding = 1.6; }
-    if (totalLinhas > 34) { fonte = 7; padding = 1.3; }
-    if (totalLinhas > 42) { fonte = 6.5; padding = 1.1; }
-
     const pageH = doc.internal.pageSize.getHeight();
+    // Altura disponível para a tabela (da posição atual até o rodapé)
+    const alturaDisp = pageH - y - 16; // reserva ~16mm pro rodapé (totais)
+    // linhas totais = cabeçalho (1) + 2 títulos + fixos + volantes
+    const linhasComCabecalho = totalLinhas + 1;
+    // altura de cada linha ≈ fonte*0.42 (texto) + padding*2. Resolve pra caber tudo:
+    // alturaLinha = fonte*0.42 + padding*2, e queremos linhasComCabecalho*alturaLinha <= alturaDisp
+    let padding = 3, fonte = 9;
+    const cabe = (f, p) => linhasComCabecalho * (f * 0.42 + p * 2) <= alturaDisp;
+    const escala = [
+        [9, 3], [8.5, 2.4], [8, 2], [7.5, 1.7], [7, 1.4], [6.5, 1.2], [6, 1], [5.5, 0.9], [5, 0.8]
+    ];
+    for (const [f, p] of escala) { if (cabe(f, p)) { fonte = f; padding = p; break; } fonte = f; padding = p; }
 
     doc.autoTable({
         startY: y,
@@ -3587,10 +3593,7 @@ function exportarEscalaPDF() {
         headStyles: { fillColor: [91, 192, 235], textColor: [255, 255, 255], fontSize: fonte + 0.5 },
         bodyStyles: { fontSize: fonte },
         columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' } },
-        styles: { cellPadding: padding, overflow: 'linebreak' },
-        margin: { bottom: 14 },
-        // Impede que o autotable quebre em várias páginas: usamos rowPageBreak avoid
-        rowPageBreak: 'avoid'
+        styles: { cellPadding: padding, overflow: 'linebreak' }
     });
 
     y = doc.lastAutoTable.finalY + 6;

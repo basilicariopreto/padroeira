@@ -5,7 +5,7 @@
 // IMPORTANTE: NÃO intercepta chamadas do Firebase (dados) — essas passam direto pela rede,
 // e o próprio Firebase cuida da fila offline/sincronização.
 
-const CACHE = 'padroeira-v2';
+const CACHE = 'padroeira-v3';
 
 // Arquivos do próprio site para funcionar offline
 const ARQUIVOS_LOCAIS = [
