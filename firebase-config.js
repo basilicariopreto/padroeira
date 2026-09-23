@@ -37,6 +37,16 @@ function salvarFirebase(dados) {
     CAMPOS_ITEM_A_ITEM_FB.forEach(campo => { delete limpo[campo]; });
     // Remove nós protegidos que não fazem parte do objeto de dados operacional
     CAMPOS_PROTEGIDOS_FB.forEach(campo => { delete limpo[campo]; });
+    // Remove as VENDAS de cada barraca do payload: vendas são gravadas item-a-item
+    // (fbAdicionarVenda/fbRemoverVenda/fbAtualizarVenda), para não sobrescrever a lista
+    // inteira quando duas pessoas lançam na mesma barraca.
+    Object.keys(limpo).forEach(k => {
+        if (limpo[k] && typeof limpo[k] === 'object' && Object.prototype.hasOwnProperty.call(limpo[k], 'vendas')) {
+            delete limpo[k].vendas;
+            // se a barraca só tinha vendas, evita gravar objeto vazio que apagaria o nó
+            if (Object.keys(limpo[k]).length === 0) delete limpo[k];
+        }
+    });
     dbRef.update(limpo).catch(err => {
         console.error('Erro ao salvar no Firebase:', err);
         // Avisa o usuário quando a gravação falha (ex: regras expiradas / sem permissão)
@@ -102,6 +112,32 @@ function fbAtualizarItem(campo, id, item) {
     return dbRef.child(campo).child(String(id)).set(limpo).catch(err => {
         console.error('Erro ao atualizar item no Firebase:', err);
         if (typeof mostrarToast === 'function') mostrarToast('⚠️ ERRO: alteração NÃO salva no servidor.', 'error');
+    });
+}
+
+// ===== VENDAS DE BARRACA (item-a-item, por id) =====
+// Grava/remove/atualiza UMA venda dentro de barraca/vendas/<id>, para várias
+// pessoas lançarem na MESMA barraca sem se sobrescrever.
+function fbAdicionarVenda(barraca, venda) {
+    const limpo = JSON.parse(JSON.stringify(venda));
+    return dbRef.child(barraca).child('vendas').child(String(venda.id)).set(limpo).catch(err => {
+        console.error('Erro ao adicionar venda no Firebase:', err);
+        if (typeof mostrarToast === 'function') mostrarToast('⚠️ ERRO: venda NÃO salva no servidor. Verifique a conexão.', 'error');
+    });
+}
+
+function fbRemoverVenda(barraca, id) {
+    return dbRef.child(barraca).child('vendas').child(String(id)).remove().catch(err => {
+        console.error('Erro ao remover venda no Firebase:', err);
+        if (typeof mostrarToast === 'function') mostrarToast('⚠️ ERRO: não foi possível remover a venda no servidor.', 'error');
+    });
+}
+
+function fbAtualizarVenda(barraca, id, venda) {
+    const limpo = JSON.parse(JSON.stringify(venda));
+    return dbRef.child(barraca).child('vendas').child(String(id)).set(limpo).catch(err => {
+        console.error('Erro ao atualizar venda no Firebase:', err);
+        if (typeof mostrarToast === 'function') mostrarToast('⚠️ ERRO: alteração da venda NÃO salva no servidor.', 'error');
     });
 }
 

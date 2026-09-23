@@ -366,12 +366,35 @@ function lancarVenda(barraca) {
     if (!produto || isNaN(preco) || qtd < 1) return;
 
     const dia = filtro === 'todos' ? 1 : filtro;
-    dados[barraca].vendas.push({
-        id: Date.now(), dia, produto, preco, qtd, total: preco * qtd
-    });
-    salvarDados(dados);
+    const venda = { id: Date.now(), dia, produto, preco, qtd, total: preco * qtd };
+    adicionarVenda(barraca, venda);
     qtdInput.value = 1;
     renderizarTudo();
+}
+
+// ===== VENDAS ITEM-A-ITEM (seguras p/ várias pessoas na mesma barraca) =====
+function adicionarVenda(barraca, venda) {
+    if (!dados[barraca]) dados[barraca] = { vendas: [] };
+    if (!Array.isArray(dados[barraca].vendas)) dados[barraca].vendas = [];
+    dados[barraca].vendas.push(venda);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+    if (typeof fbAdicionarVenda === 'function') fbAdicionarVenda(barraca, venda);
+    else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
+}
+function removerVendaFb(barraca, id) {
+    if (!dados[barraca] || !Array.isArray(dados[barraca].vendas)) return;
+    dados[barraca].vendas = dados[barraca].vendas.filter(v => String(v.id) !== String(id));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+    if (typeof fbRemoverVenda === 'function') fbRemoverVenda(barraca, id);
+    else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
+}
+function atualizarVendaFb(barraca, id) {
+    if (!dados[barraca] || !Array.isArray(dados[barraca].vendas)) return;
+    const venda = dados[barraca].vendas.find(v => String(v.id) === String(id));
+    if (!venda) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+    if (typeof fbAtualizarVenda === 'function') fbAtualizarVenda(barraca, id, venda);
+    else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
 }
 
 // ===== LANÇAR VENDA ARTESANATO (preço livre) =====
@@ -385,10 +408,7 @@ function lancarVendaArtesanato() {
     if (!produto || isNaN(preco) || preco <= 0 || qtd < 1) return;
 
     const dia = filtro === 'todos' ? 1 : filtro;
-    dados['artesanato'].vendas.push({
-        id: Date.now(), dia, produto, preco, qtd, total: preco * qtd
-    });
-    salvarDados(dados);
+    adicionarVenda('artesanato', { id: Date.now(), dia, produto, preco, qtd, total: preco * qtd });
     descInput.value = ''; precoInput.value = ''; qtdInput.value = 1;
     renderizarTudo();
 }
@@ -404,10 +424,7 @@ function lancarVendaLeilao() {
     if (!produto || isNaN(preco) || preco <= 0 || qtd < 1) return;
 
     const dia = filtro === 'todos' ? 1 : filtro;
-    dados['bingo'].vendas.push({
-        id: Date.now(), dia, produto, preco, qtd, total: preco * qtd
-    });
-    salvarDados(dados);
+    adicionarVenda('bingo', { id: Date.now(), dia, produto, preco, qtd, total: preco * qtd });
     descInput.value = ''; precoInput.value = ''; qtdInput.value = 1;
     renderizarTudo();
 }
@@ -865,8 +882,8 @@ function renderizarPatrocinadores() {
 
 // ===== RENDERIZAR BARRACA (só vendas) =====
 function removerVenda(barraca, id) {
-    dados[barraca].vendas = dados[barraca].vendas.filter(v => String(v.id) !== String(id));
-    salvarDados(dados); renderizarTudo();
+    removerVendaFb(barraca, id);
+    renderizarTudo();
 }
 
 function renderizarBarraca(barraca) {
@@ -1596,10 +1613,16 @@ function salvarEdicao() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
     const mapaCampo = { despesa: 'despesas', patrocinio: 'patrocinadores', doador: 'doadores' };
     const campo = mapaCampo[edicaoAtual.tipo];
-    if (campo && typeof fbGravarCampo === 'function') {
-        fbGravarCampo(campo, dados[campo]); // regrava campo inteiro por id (elimina duplicata de posição)
+    if (campo) {
+        // Grava SÓ o item editado por id (não reescreve a lista inteira — evita apagar itens de outros dispositivos)
+        const itemEditado = (dados[campo] || []).find(x => String(x.id) === String(edicaoAtual.id));
+        if (itemEditado && typeof fbAtualizarItem === 'function') fbAtualizarItem(campo, edicaoAtual.id, itemEditado);
+        else if (typeof fbGravarCampo === 'function') fbGravarCampo(campo, dados[campo]);
+        else if (typeof salvarFirebase === 'function') salvarFirebase(dados);
+    } else if (edicaoAtual.tipo === 'venda') {
+        // Venda de barraca: grava só a venda editada por id
+        atualizarVendaFb(edicaoAtual.barraca, edicaoAtual.id);
     } else {
-        // venda (barraca) ou fallback
         if (typeof salvarFirebase === 'function') salvarFirebase(dados);
     }
     fecharModal();
@@ -2294,8 +2317,10 @@ function gerarPDFComLogo(logoBase64) {
         body: (function(){
             const doacEnt = doacoesEntradaPDF.reduce((s,d) => s + (d.valor||0), 0);
             const camisPagas = (dados.camisetas || []).filter(c => c.pago).reduce((s,c) => s + (c.valor||0), 0);
-            const receitaTotalPdf = receita + doacEnt + camisPagas;
-            const saldoLiqPdf = saldo + doacEnt + camisPagas;
+            // receita e saldo JÁ incluem doações em dinheiro e camisetas pagas (calculados no Resumo Executivo).
+            // Não somar de novo aqui (evita dupla contagem).
+            const receitaTotalPdf = receita;
+            const saldoLiqPdf = saldo;
             return [
                 ['(+) Vendas nas barracas', 'R$ ' + fmt(totalVendas)],
                 ['(+) Patrocínios em dinheiro', 'R$ ' + fmt(patrDinheiro)],
