@@ -735,15 +735,17 @@ function lancarPatrocinio() {
     const barraca = document.getElementById('barracaPatrocinio').value;
     const obs = document.getElementById('obsPatrocinio').value.trim();
     const recebido = document.getElementById('recebidoPatrocinio').checked;
+    const logoEnviado = document.getElementById('logoEnviadoPatrocinio') ? document.getElementById('logoEnviadoPatrocinio').checked : false;
     if (!nome) { alert('Preencha o nome do patrocinador'); return; }
 
-    adicionarItem('patrocinadores', { id: Date.now(), nome, tipo, valor, desc, barraca, obs, recebido });
+    adicionarItem('patrocinadores', { id: Date.now(), nome, tipo, valor, desc, barraca, obs, recebido, logoEnviado });
     document.getElementById('nomePatrocinador').value = '';
     document.getElementById('valorPatrocinio').value = '';
     document.getElementById('descPatrocinio').value = '';
     document.getElementById('barracaPatrocinio').value = '';
     document.getElementById('obsPatrocinio').value = '';
     document.getElementById('recebidoPatrocinio').checked = false;
+    if (document.getElementById('logoEnviadoPatrocinio')) document.getElementById('logoEnviadoPatrocinio').checked = false;
     renderizarTudo();
 }
 
@@ -755,6 +757,11 @@ function removerPatrocinio(id) {
 function toggleRecebido(id) {
     const item = dados.patrocinadores.find(p => String(p.id) === String(id));
     if (item) { atualizarItem('patrocinadores', id, { recebido: !item.recebido }); renderizarTudo(); }
+}
+
+function toggleLogoEnviado(id) {
+    const item = dados.patrocinadores.find(p => String(p.id) === String(id));
+    if (item) { atualizarItem('patrocinadores', id, { logoEnviado: !item.logoEnviado }); renderizarTudo(); }
 }
 
 let ordenacaoPatr = 'alfa';
@@ -829,6 +836,7 @@ function renderizarPatrocinadores() {
             <td>${valorDisplay}</td>
             <td>${barracaNome}</td>
             <td><span class="${p.recebido ? 'badge-pago' : 'badge-pendente'}" onclick="toggleRecebido(${p.id})">${p.recebido ? 'Recebido' : 'Pendente'}</span></td>
+            <td><span class="${p.logoEnviado ? 'badge-pago' : 'badge-pendente'}" onclick="toggleLogoEnviado(${p.id})">${p.logoEnviado ? 'Enviado' : 'Pendente'}</span></td>
             <td>
                 <button class="btn-edit" onclick="editarPatrocinio(${p.id})">✏️</button>
                 <button class="btn-delete" onclick="confirmarExclusao('Excluir este patrocínio?', () => removerPatrocinio(${p.id}))">X</button>
@@ -1048,13 +1056,14 @@ function exportarPatrocinadoresPDF() {
             3: { cellWidth: 25 },
             4: { cellWidth: 25 }
         },
-        head: [['Patrocinador', 'Tipo', 'Descrição', 'Valor', 'Status']],
+        head: [['Patrocinador', 'Tipo', 'Descrição', 'Valor', 'Status', 'Logo']],
         body: lista.map(p => [
             p.nome || '-',
             TIPOS[p.tipo] || 'Dinheiro',
             p.desc || '-',
             (p.valor||0) > 0 ? 'R$ ' + fmt(p.valor||0) : '-',
-            p.recebido ? 'Recebido' : 'Pendente'
+            p.recebido ? 'Recebido' : 'Pendente',
+            p.logoEnviado ? 'Enviado' : 'Pendente'
         ])
     });
     y = doc.lastAutoTable.finalY + 8;
@@ -1073,9 +1082,9 @@ function exportarPatrocinadoresCSV() {
     const patrs = dados.patrocinadores || [];
     if (patrs.length === 0) { alert('Nenhum patrocinador cadastrado'); return; }
     const TIPOS = { dinheiro: 'Dinheiro', servico: 'Serviço', produto: 'Produto' };
-    let csv = 'Patrocinador;Tipo;Descrição;Valor;Status;Observação\n';
+    let csv = 'Patrocinador;Tipo;Descrição;Valor;Status;Logo;Observação\n';
     [...patrs].sort((a,b) => a.nome.localeCompare(b.nome)).forEach(p => {
-        csv += `${p.nome};${TIPOS[p.tipo]||'Dinheiro'};${p.desc||''};${p.valor > 0 ? fmt(p.valor) : ''};${p.recebido ? 'Recebido' : 'Pendente'};${p.obs||''}\n`;
+        csv += `${p.nome};${TIPOS[p.tipo]||'Dinheiro'};${p.desc||''};${p.valor > 0 ? fmt(p.valor) : ''};${p.recebido ? 'Recebido' : 'Pendente'};${p.logoEnviado ? 'Enviado' : 'Pendente'};${p.obs||''}\n`;
     });
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');

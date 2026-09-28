@@ -60,6 +60,7 @@
                 <div class="form-row">
                     <input type="text" id="obsPatrocinio" placeholder="Observação (opcional)">
                     <label class="checkbox-opt"><input type="checkbox" id="recebidoPatrocinio"> Já recebido/confirmado</label>
+                    <label class="checkbox-opt"><input type="checkbox" id="logoEnviadoPatrocinio"> Logo enviado</label>
                     <button class="btn-patrocinio" onclick="lancarPatrocinio()">Lançar</button>
                 </div>
             </div>
@@ -76,7 +77,7 @@
                 <button class="filtro-btn" data-ordpatr="recebido" onclick="ordenarPatrocinadores('recebido')">Recebidos</button>
             </div>
             <div class="tabela-box">
-                <table id="tabelaPatrocinadores"><thead><tr><th>Patrocinador</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+                <table id="tabelaPatrocinadores"><thead><tr><th>Patrocinador</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Status</th><th>Logo</th><th></th></tr></thead><tbody></tbody></table>
             </div>
             <div class="resumo-barraca" id="resumoPatrocinadores"></div>
         </section>

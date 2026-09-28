@@ -90,6 +90,7 @@ function normalizarDados(d) {
     if (!d) return dadosVazios();
     if (d.patrocinadores && !Array.isArray(d.patrocinadores)) d.patrocinadores = Object.values(d.patrocinadores);
     if (!d.patrocinadores) d.patrocinadores = [];
+    d.patrocinadores.forEach(p => { if (p && p.logoEnviado === undefined) p.logoEnviado = false; });
     if (d.despesas && !Array.isArray(d.despesas)) d.despesas = Object.values(d.despesas);
     if (!d.despesas) d.despesas = [];
 
