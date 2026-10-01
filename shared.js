@@ -141,10 +141,17 @@ function normalizarDados(d) {
 
     if (d.camisetas && !Array.isArray(d.camisetas)) d.camisetas = Object.values(d.camisetas);
     if (!d.camisetas) d.camisetas = [];
-    // Migração: camisetas antigas "Baby Look" viram "Casual" (mantém o tamanho)
-    d.camisetas.forEach(c => { if (c.modelagem === 'Baby Look') c.modelagem = 'Casual'; if (!c.modelagem) c.modelagem = 'Casual'; });
-    if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0 };
-    normalizarEstoqueCamisetas(d.configCamisetas);
+    // Novo modelo: cada item é um pagamento {id, nome, tipo, valor, pago, data, obs}
+    d.camisetas.forEach(c => {
+        if (!c.data) c.data = new Date().toISOString().split('T')[0];
+        if (c.pago === undefined) c.pago = true;
+        if (!c.valor) c.valor = 0;
+    });
+    if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
+    if (d.configCamisetas.qtdTrabalhador === undefined) d.configCamisetas.qtdTrabalhador = 0;
+    if (d.configCamisetas.qtdPublico === undefined) d.configCamisetas.qtdPublico = 0;
+    if (d.configCamisetas.custoTrabalhador === undefined) d.configCamisetas.custoTrabalhador = 0;
+    if (d.configCamisetas.custoPublico === undefined) d.configCamisetas.custoPublico = 0;
 
     // Garantir que todos os ids sejam NÚMERO (Firebase converte chaves para string)
     ['patrocinadores','despesas','doadores','necessidades','doacoesEntrada','caixas','camisetas'].forEach(campo => {

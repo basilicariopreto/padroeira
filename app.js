@@ -183,11 +183,16 @@ function normalizarDados(d) {
     if (d.camisetas && !Array.isArray(d.camisetas)) d.camisetas = Object.values(d.camisetas);
     if (!d.camisetas) d.camisetas = [];
     // Migração: camisetas antigas "Baby Look" viram "Casual" (mantém o tamanho)
-    d.camisetas.forEach(c => { if (c.modelagem === 'Baby Look') c.modelagem = 'Casual'; if (!c.modelagem) c.modelagem = 'Casual'; });
-    if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0 };
+    d.camisetas.forEach(c => {
+        if (!c.data) c.data = new Date().toISOString().split('T')[0];
+        if (c.pago === undefined) c.pago = true;
+        if (!c.valor) c.valor = 0;
+    });
+    if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
+    if (d.configCamisetas.qtdTrabalhador === undefined) d.configCamisetas.qtdTrabalhador = 0;
+    if (d.configCamisetas.qtdPublico === undefined) d.configCamisetas.qtdPublico = 0;
     if (d.configCamisetas.custoTrabalhador === undefined) d.configCamisetas.custoTrabalhador = 0;
     if (d.configCamisetas.custoPublico === undefined) d.configCamisetas.custoPublico = 0;
-    normalizarEstoqueCamisetas(d.configCamisetas);
 
     // Garantir que todos os ids sejam NÚMERO (Firebase converte chaves para string)
     ['patrocinadores','despesas','doadores','necessidades','doacoesEntrada','caixas','camisetas'].forEach(campo => {
@@ -1002,8 +1007,8 @@ function atualizarResumoGeral() {
     const totalDespesasCompra = dados.despesas.filter(d => !d.doacao).reduce((s, d) => s + (d.valor||0), 0);
     const totalDoacoes = dados.despesas.filter(d => d.doacao).reduce((s, d) => s + (d.valor||0), 0);
     const totalDoacoesEntrada = (dados.doacoesEntrada || []).reduce((s, d) => s + (d.valor||0), 0);
-    // Camisetas: só as PAGAS entram na receita (pendentes ficam como "a receber")
-    const totalCamisetasPagas = (dados.camisetas || []).filter(c => c.pago).reduce((s, c) => s + (c.valor||0), 0);
+    // Camisetas: todos os lançamentos são pagamentos já recebidos
+    const totalCamisetasPagas = (dados.camisetas || []).reduce((s, c) => s + (c.valor||0), 0);
 
     // Receita = só DINHEIRO que entra no caixa (vendas, patrocínio em dinheiro RECEBIDO, doações em dinheiro, camisetas pagas).
     // Patrocínio pendente ou em serviço/produto NÃO entra na receita (mostrado à parte).
@@ -1399,9 +1404,9 @@ function renderizarAReceber() {
     if (!listaEl) return;
     const hoje = new Date().toISOString().split('T')[0];
 
-    // 1) Camisetas não pagas (agrupadas)
-    const camisPend = (dados.camisetas || []).filter(c => !c.pago && (c.valor || 0) > 0);
-    const totalCamis = camisPend.reduce((s, c) => s + (c.valor || 0), 0);
+    // 1) Camisetas: no novo modelo todos os registros são pagamentos recebidos
+    // Não há mais "camisetas pendentes" — o controle é pelo total vs custo
+    const totalCamis = 0; // sem pendências por camiseta no novo modelo
 
     // 2) Patrocínio em dinheiro não recebido
     const patrPend = (dados.patrocinadores || []).filter(p => (p.tipo || 'dinheiro') === 'dinheiro' && !p.recebido);
@@ -1430,22 +1435,7 @@ function renderizarAReceber() {
     let html = '';
 
     // ---- A RECEBER ----
-    // Camisetas
-    if (camisPend.length > 0) {
-        const grupos = (typeof agruparCamisetas === 'function') ? agruparCamisetas(camisPend) : camisPend.map(c => ({ ...c, qtd: 1 }));
-        html += `<div class="tabela-box" style="margin-bottom:12px">
-            <h4>👕 Camisetas a receber — ${R$(totalCamis)}</h4>
-            <table><thead><tr><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Tam.</th><th>Qtd</th><th>Valor</th></tr></thead><tbody>`;
-        grupos.forEach(g => {
-            html += `<tr>
-                <td style="font-weight:700">${g.nome}</td><td>${g.telefone || '-'}</td>
-                <td>${g.tipo === 'trabalhador' ? 'Trabalhador' : 'Público'}</td>
-                <td>${g.tamanho}</td><td style="text-align:center">${g.qtd}</td>
-                <td>${R$((g.valor || 0) * g.qtd)}</td>
-            </tr>`;
-        });
-        html += '</tbody></table></div>';
-    }
+    // Camisetas: sem pendências no novo modelo (todo lançamento é valor já recebido)
 
     // Patrocínios
     if (patrPend.length > 0) {
@@ -2286,32 +2276,28 @@ function gerarPDFComLogo(logoBase64) {
         checkPage(30);
         titulo('VENDA DE CAMISETAS');
         const TIPO_LBL = { trabalhador: 'Trabalhador', publico: 'Público' };
-        // Agrupado por nome+tipo+tamanho+status (mesma lógica da tela)
-        const gruposCamis = (typeof agruparCamisetas === 'function') ? agruparCamisetas(camisetasPDF) : camisetasPDF.map(c => ({ ...c, qtd: 1 }));
+        const ordenadaPDF = [...camisetasPDF].sort((a,b) => (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||''));
         doc.autoTable({
             startY: y, theme: 'grid',
             headStyles: { fillColor: [91, 192, 235], textColor: [255,255,255], fontSize: 8 },
             bodyStyles: { fontSize: 7 },
             styles: { overflow: 'linebreak', cellPadding: 2 },
-            head: [['Nome', 'Telefone', 'Tipo', 'Tam.', 'Qtd', 'Valor', 'Status']],
-            body: gruposCamis.map(g => {
-                const total = (g.valor||0) * (g.qtd||1);
-                return [
-                    g.nome || '-', g.telefone || '-', TIPO_LBL[g.tipo] || g.tipo,
-                    g.tamanho || '-', String(g.qtd||1),
-                    total > 0 ? 'R$ ' + fmt(total) : '-',
-                    g.pago ? 'Pago' : 'Pendente'
-                ];
+            head: [['Data', 'Nome', 'Tipo', 'Qtd', 'Valor', 'Obs']],
+            body: ordenadaPDF.map(c => {
+                const qtd = qtdPorPagamento(c.valor||0, c.tipo);
+                const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+                return [dataFmt, c.nome||'-', TIPO_LBL[c.tipo]||c.tipo, String(qtd), c.valor>0?'R$ '+fmt(c.valor):'-', c.obs||'-'];
             })
         });
         y = doc.lastAutoTable.finalY + 5;
         const totCamis = camisetasPDF.reduce((s,c)=>s+(c.valor||0),0);
-        const totCamisPagas = camisetasPDF.filter(c=>c.pago).reduce((s,c)=>s+(c.valor||0),0);
-        const totCustoCamis = (typeof custoPorTipoCamisa === 'function') ? camisetasPDF.reduce((s,c)=>s+custoPorTipoCamisa(c.tipo),0) : 0;
+        const qtdTrabPDF = camisetasPDF.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
+        const qtdPubPDF = camisetasPDF.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
+        const totCustoCamis = (dados.configCamisetas?.custoTrabalhador||0) + (dados.configCamisetas?.custoPublico||0);
         const lucroCamis = totCamis - totCustoCamis;
         doc.setFontSize(9); doc.setTextColor(80);
-        doc.text(`Total: ${camisetasPDF.length} camisetas | Valor (venda): R$ ${fmt(totCamis)} | Recebido: R$ ${fmt(totCamisPagas)} | A receber: R$ ${fmt(totCamis - totCamisPagas)}`, 14, y); y += 5;
-        doc.text(`Custo total: R$ ${fmt(totCustoCamis)} | Lucro estimado: R$ ${fmt(lucroCamis)}`, 14, y);
+        doc.text(`Total: ${qtdTrabPDF+qtdPubPDF} camisetas | Trabalhador: ${qtdTrabPDF} | Público: ${qtdPubPDF} | Recebido: R$ ${fmt(totCamis)}`, 14, y); y += 5;
+        doc.text(`Custo lotes: R$ ${fmt(totCustoCamis)} | Saldo: R$ ${fmt(lucroCamis)}`, 14, y);
         y += 15;
     }
 
@@ -2325,7 +2311,7 @@ function gerarPDFComLogo(logoBase64) {
         head: [['', 'Valor']],
         body: (function(){
             const doacEnt = doacoesEntradaPDF.reduce((s,d) => s + (d.valor||0), 0);
-            const camisPagas = (dados.camisetas || []).filter(c => c.pago).reduce((s,c) => s + (c.valor||0), 0);
+            const camisPagas = (dados.camisetas || []).reduce((s,c) => s + (c.valor||0), 0);
             // receita e saldo JÁ incluem doações em dinheiro e camisetas pagas (calculados no Resumo Executivo).
             // Não somar de novo aqui (evita dupla contagem).
             const receitaTotalPdf = receita;
@@ -2343,7 +2329,7 @@ function gerarPDFComLogo(logoBase64) {
                 ['Barracas ativas', BARRACAS.filter(b => dados[b] && dados[b].vendas.length > 0).length.toString()],
                 ['Patrocinadores', (dados.patrocinadores||[]).length.toString()],
                 ['Doadores (dinheiro)', doacoesEntradaPDF.length.toString()],
-                ['Camisetas vendidas', (dados.camisetas||[]).length.toString()],
+                ['Camisetas vendidas', String(['trabalhador','publico'].reduce((s,t)=>s+(dados.camisetas||[]).filter(c=>c.tipo===t).reduce((ss,c)=>ss+qtdPorPagamento(c.valor||0,t),0),0))],
                 ['Economia com doações em produtos', 'R$ ' + fmt(despDoacoes)]
             ];
         })()
@@ -4346,17 +4332,33 @@ function custoPorTipoCamisa(tipo) {
     return tipo === 'trabalhador' ? (cfg.custoTrabalhador || 0) : (cfg.custoPublico || 0);
 }
 
-// Config: quando true, bloqueia a venda ao esgotar o estoque. Por enquanto FALSE
-// (só mostra a quantidade, deixando negativa quando passa do disponível).
-const BLOQUEAR_ESTOQUE_CAMISETA = false;
-
-// Quantas camisetas já foram registradas de um tipo + tamanho
-function contarVendidas(tipo, tamanho) {
-    return (dados.camisetas || []).filter(c => c.tipo === tipo && c.tamanho === tamanho).length;
+// Calcula quantas camisetas um pagamento representa (floor do valor / preço unitário)
+function qtdPorPagamento(valorPago, tipo) {
+    const preco = precoPorTipoCamisa(tipo);
+    if (!preco || preco <= 0) return 1;
+    return Math.max(1, Math.floor((valorPago || 0) / preco));
 }
-function estoqueDe(tipo, tamanho) {
-    const est = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
-    return (est[tipo] && est[tipo][tamanho]) || 0;
+
+// Quantas camisetas de um tipo foram vendidas (soma por pagamento)
+function qtdVendidasTipo(tipo) {
+    return (dados.camisetas || [])
+        .filter(c => c.tipo === tipo)
+        .reduce((s, c) => s + qtdPorPagamento(c.valor || 0, tipo), 0);
+}
+
+// Estoque configurado (qtd total de peças disponíveis por tipo)
+function estoqueConfigTipo(tipo) {
+    const cfg = dados.configCamisetas || {};
+    return tipo === 'trabalhador' ? (cfg.qtdTrabalhador || 0) : (cfg.qtdPublico || 0);
+}
+
+// Quantas peças faltam vender para cobrir o custo (ponto de equilíbrio)
+function pontosEquilibrio(tipo) {
+    const cfg = dados.configCamisetas || {};
+    const custo = tipo === 'trabalhador' ? (cfg.custoTrabalhador || 0) : (cfg.custoPublico || 0);
+    const preco = precoPorTipoCamisa(tipo);
+    if (!preco) return null;
+    return Math.ceil(custo / preco);
 }
 
 function salvarConfigCamisetas() {
@@ -4365,169 +4367,75 @@ function salvarConfigCamisetas() {
     dados.configCamisetas.precoPublico = parseFloat(document.getElementById('cfgPrecoPublico').value) || 0;
     dados.configCamisetas.custoTrabalhador = parseFloat(document.getElementById('cfgCustoTrabalhador').value) || 0;
     dados.configCamisetas.custoPublico = parseFloat(document.getElementById('cfgCustoPublico').value) || 0;
-    // Estoque por tipo + tamanho
-    const est = { trabalhador: {}, publico: {} };
-    ['trabalhador', 'publico'].forEach(tp => {
-        TAMANHOS_LISTA.forEach(t => {
-            const inp = document.getElementById('cfgEstoque_' + tp + '_' + t);
-            est[tp][t] = inp ? (parseInt(inp.value) || 0) : estoqueDe(tp, t);
-        });
-    });
-    dados.configCamisetas.estoque = est;
+    dados.configCamisetas.qtdTrabalhador = parseInt(document.getElementById('cfgQtdTrabalhador').value) || 0;
+    dados.configCamisetas.qtdPublico = parseInt(document.getElementById('cfgQtdPublico').value) || 0;
     salvarDados(dados);
     renderizarCamisetas();
     mostrarToast('Configuração das camisetas salva!');
 }
 
-// Renderiza os inputs de estoque por tamanho na admin (Trabalhador e Público)
-function renderizarInputsEstoque() {
-    const box = document.getElementById('estoqueCamisetasInputs');
-    if (!box) return;
-    const bloco = (tp, titulo) => `
-        <div style="margin-bottom:12px">
-            <div style="font-weight:700;color:var(--cor-amarelo);margin-bottom:6px">${titulo}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:10px">
-            ${TAMANHOS_LISTA.map(t => {
-                const id = 'cfgEstoque_' + tp + '_' + t;
-                const focado = document.activeElement && document.activeElement.id === id;
-                const val = focado ? document.getElementById(id).value : (estoqueDe(tp, t) || '');
-                return `<div style="text-align:center">
-                    <label style="display:block;font-size:0.75rem;color:var(--cor-palha);font-weight:700;margin-bottom:2px">${t}</label>
-                    <input type="number" id="${id}" value="${val}" min="0" placeholder="0" style="width:56px;text-align:center">
-                </div>`;
-            }).join('')}
-            </div>
-        </div>`;
-    box.innerHTML = bloco('trabalhador', '👷 Trabalhador') + bloco('publico', '👥 Público em geral');
-}
-
-// Preenche o select de tamanho conforme o TIPO escolhido (mostra disponível daquele tipo)
-function atualizarTamanhosCamiseta() {
-    const sel = document.getElementById('camisaTamanho');
-    // Mantida por compatibilidade — agora só dispara a renderização da grade
-    if (!sel && !document.getElementById('gradeTamanhosCamisa')) return;
-    renderizarGradeTamanhosCamisa();
-}
-
-// Renderiza a grade de tamanhos (todas as numerações) com um campo de quantidade cada.
-// Usada tanto para Trabalhador quanto para Público.
-function renderizarGradeTamanhosCamisa() {
-    const grade = document.getElementById('gradeTamanhosCamisa');
-    if (!grade) return;
-    // Se o usuário está digitando em algum campo da grade, NÃO reconstruir (evita apagar o que foi digitado por um sync do Firebase)
-    const ativo = document.activeElement;
-    if (ativo && ativo.id && ativo.id.indexOf('gradeTam_') === 0) { atualizarTotalCamisa(); return; }
-    const tipo = document.getElementById('camisaTipo') ? document.getElementById('camisaTipo').value : '';
-    if (!tipo) { grade.innerHTML = '<span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>'; return; }
-    const est = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
-    const estTipo = est[tipo] || {};
-    const temEstoque = Object.values(estTipo).some(v => (v || 0) > 0);
-    grade.innerHTML = (TAMANHOS_CAMISETA['Casual'] || []).map(x => {
-        const id = 'gradeTam_' + x.t;
-        let info = '';
-        if (temEstoque) {
-            const disp = estTipo[x.t] || 0;
-            const restante = disp - contarVendidas(tipo, x.t);
-            info = `<div style="font-size:0.68rem;opacity:0.75;margin-top:1px">${restante} disp.</div>`;
-        }
-        return `<div style="text-align:center">
-            <label style="display:block;font-size:0.78rem;color:var(--cor-palha);font-weight:700;margin-bottom:2px">${x.t}</label>
-            <input type="number" inputmode="numeric" id="${id}" value="" min="0" placeholder="0" class="input-tam-camisa" oninput="atualizarTotalCamisa()">
-            ${info}
-        </div>`;
-    }).join('');
-    atualizarTotalCamisa();
-}
-
-// Só recalcula o texto do total (NÃO recria a grade — senão apagaria os outros campos)
-function atualizarTotalCamisa() {
-    const tipo = document.getElementById('camisaTipo') ? document.getElementById('camisaTipo').value : '';
-    const info = document.getElementById('camisaPrecoInfo');
-    if (!info) return;
-    if (!tipo) { info.textContent = ''; return; }
-    const preco = precoPorTipoCamisa(tipo);
-    let total = 0;
-    (TAMANHOS_CAMISETA['Casual'] || []).forEach(x => {
-        const inp = document.getElementById('gradeTam_' + x.t);
-        total += inp ? (parseInt(inp.value) || 0) : 0;
-    });
-    let txt = preco > 0 ? `Valor unitário: ${R$(preco)}` : 'Valor: a definir (configure os preços acima)';
-    if (total > 0 && preco > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''} = ${R$(preco * total)}`;
-    else if (total > 0) txt += ` | ${total} camiseta${total > 1 ? 's' : ''}`;
-    info.textContent = txt;
-}
-
-// Chamada quando muda o TIPO: reconstrói a grade (limpa quantidades) e recalcula total
-function atualizarPrecoCamiseta() {
-    renderizarGradeTamanhosCamisa();
-}
-
 function registrarCamiseta() {
     const nome = document.getElementById('camisaNome').value.trim();
-    const telefone = document.getElementById('camisaTelefone').value.trim();
     const tipo = document.getElementById('camisaTipo').value;
-    const modelagem = document.getElementById('camisaModelagem').value;
-    const pago = document.getElementById('camisaPago').checked;
+    const valorStr = document.getElementById('camisaValorPago').value;
+    const valorPago = parseFloat(valorStr) || 0;
+    const obs = document.getElementById('camisaObs').value.trim();
+    const dataEl = document.getElementById('camisaData');
+    const data = dataEl ? dataEl.value : new Date().toISOString().split('T')[0];
 
     if (!nome) { alert('Preencha o nome da pessoa'); return; }
-    if (!tipo) { alert('Selecione o tipo de comprador'); return; }
+    if (!tipo) { alert('Selecione o tipo (Trabalhador ou Público)'); return; }
+    if (valorPago <= 0) { alert('Informe o valor pago'); return; }
 
-    // Coleta as quantidades por tamanho da grade
-    const pedidos = [];
-    (TAMANHOS_CAMISETA['Casual'] || []).forEach(x => {
-        const inp = document.getElementById('gradeTam_' + x.t);
-        const q = inp ? (parseInt(inp.value) || 0) : 0;
-        if (q > 0) pedidos.push({ tamanho: x.t, qtd: q });
-    });
-    if (pedidos.length === 0) { alert('Informe a quantidade de pelo menos um tamanho'); return; }
-
-    // Checagem de estoque por tamanho (avisa se passar; só bloqueia se BLOQUEAR_ESTOQUE_CAMISETA=true)
-    const avisos = [];
-    pedidos.forEach(p => {
-        const disp = estoqueDe(tipo, p.tamanho);
-        if (disp > 0) {
-            const restante = disp - contarVendidas(tipo, p.tamanho);
-            if (p.qtd > restante) avisos.push(`${p.tamanho}: pedido ${p.qtd}, disponível ${restante}`);
-        }
-    });
-    if (avisos.length > 0) {
-        if (BLOQUEAR_ESTOQUE_CAMISETA) {
-            alert('Estoque insuficiente:\n' + avisos.join('\n'));
-            return;
-        } else {
-            if (!confirm('Atenção: alguns tamanhos passam do estoque (ficarão negativos):\n\n' + avisos.join('\n') + '\n\nRegistrar mesmo assim?')) return;
-        }
+    // Confirma quantidade calculada
+    const qtd = qtdPorPagamento(valorPago, tipo);
+    const preco = precoPorTipoCamisa(tipo);
+    if (preco > 0 && valorPago % preco !== 0) {
+        const msg = `Valor R$ ${fmt(valorPago)} com preço unitário R$ ${fmt(preco)} = ${qtd} camiseta${qtd>1?'s':''} (sobra R$ ${fmt(valorPago - qtd*preco)}). Confirma?`;
+        if (!confirm(msg)) return;
     }
 
-    const valor = precoPorTipoCamisa(tipo);
-    const totalCriadas = pedidos.reduce((s, p) => s + p.qtd, 0);
-    let base = Date.now();
-    pedidos.forEach(p => {
-        for (let i = 0; i < p.qtd; i++) {
-            adicionarItem('camisetas', { id: base++, nome, telefone, tipo, modelagem: modelagem || 'Casual', tamanho: p.tamanho, valor, pago });
-        }
+    adicionarItem('camisetas', {
+        id: Date.now(),
+        nome,
+        tipo,
+        valor: valorPago,  // 'valor' mantido para compatibilidade com receita/relatórios
+        pago: true,         // sempre pago (é o valor já recebido)
+        obs,
+        data: data || new Date().toISOString().split('T')[0]
     });
 
     document.getElementById('camisaNome').value = '';
-    document.getElementById('camisaTelefone').value = '';
     document.getElementById('camisaTipo').value = '';
-    document.getElementById('camisaPago').checked = true;
-    document.getElementById('camisaPrecoInfo').textContent = '';
-    renderizarGradeTamanhosCamisa();
-
+    document.getElementById('camisaValorPago').value = '';
+    document.getElementById('camisaObs').value = '';
+    document.getElementById('camisaInfoQtd').textContent = '';
     renderizarCamisetas();
-    const resumoPedido = pedidos.map(p => `${p.qtd} ${p.tamanho}`).join(', ');
-    mostrarToast(`✅ ${totalCriadas} camiseta${totalCriadas > 1 ? 's' : ''} de ${nome} registrada${totalCriadas > 1 ? 's' : ''}!`);
-    registrarAcao(`Camisetas: ${nome} (${tipo}) — ${resumoPedido}`);
+    mostrarToast(`✅ ${qtd} camiseta${qtd>1?'s':''} de ${nome} registrada${qtd>1?'s':''}!`);
+    registrarAcao(`Camisetas: ${nome} (${tipo === 'trabalhador' ? 'Trabalhador' : 'Público'}) — R$ ${fmt(valorPago)} = ${qtd} un.`);
 }
 
-function togglePagoCamiseta(id) {
-    const item = (dados.camisetas || []).find(c => String(c.id) === String(id));
-    if (item) { atualizarItem('camisetas', id, { pago: !item.pago }); renderizarCamisetas(); }
+// Atualiza o texto de prévia da quantidade ao digitar valor
+function atualizarInfoQtdCamisa() {
+    const tipo = document.getElementById('camisaTipo').value;
+    const valorStr = document.getElementById('camisaValorPago').value;
+    const info = document.getElementById('camisaInfoQtd');
+    if (!info) return;
+    if (!tipo || !valorStr) { info.textContent = ''; return; }
+    const valorPago = parseFloat(valorStr) || 0;
+    const preco = precoPorTipoCamisa(tipo);
+    if (preco <= 0) { info.textContent = 'Configure o preço unitário acima.'; return; }
+    const qtd = Math.floor(valorPago / preco);
+    const troco = valorPago - qtd * preco;
+    let txt = `= ${qtd} camiseta${qtd !== 1 ? 's' : ''} (R$ ${fmt(preco)}/un.)`;
+    if (troco > 0) txt += ` · sobra R$ ${fmt(troco)}`;
+    if (qtd < 1) txt = `Valor mínimo: R$ ${fmt(preco)}`;
+    info.textContent = txt;
+    info.style.color = qtd >= 1 ? '#81c784' : '#ef5350';
 }
 
 function removerCamiseta(id) {
-    if (!confirm('Remover esta venda de camiseta?')) return;
+    if (!confirm('Remover este registro?')) return;
     removerItem('camisetas', id);
     renderizarCamisetas();
 }
@@ -4545,41 +4453,32 @@ function editarCamiseta(id) {
     if (!item) return;
     edicaoAtual = { tipo: 'camiseta', id };
     document.getElementById('modalConteudo').innerHTML = `
-        <div class="campo"><label>Nome</label><input type="text" id="editCamisaNome" value="${item.nome}"></div>
-        <div class="campo"><label>Telefone</label><input type="tel" id="editCamisaTelefone" value="${item.telefone || ''}"></div>
+        <div class="campo"><label>Nome</label><input type="text" id="editCamisaNome" value="${item.nome || ''}"></div>
         <div class="campo"><label>Tipo</label>
             <select id="editCamisaTipo">
                 <option value="trabalhador" ${item.tipo==='trabalhador'?'selected':''}>Trabalhador</option>
                 <option value="publico" ${item.tipo==='publico'?'selected':''}>Público em geral</option>
             </select>
         </div>
-        <input type="hidden" id="editCamisaModelagem" value="Casual">
-        <div class="campo"><label>Tamanho</label>
-            <select id="editCamisaTamanho">${(TAMANHOS_CAMISETA['Casual']||[]).map(x => `<option value="${x.t}" ${x.t===item.tamanho?'selected':''}>${x.t} (${x.ref})</option>`).join('')}</select>
-        </div>
-        <div class="campo"><label>Valor R$ (edite para dar desconto)</label><input type="number" id="editCamisaValor" value="${item.valor || 0}" step="0.01" min="0"></div>
+        <div class="campo"><label>Valor pago R$</label><input type="number" id="editCamisaValor" value="${item.valor || 0}" step="0.01" min="0"></div>
+        <div class="campo"><label>Data</label><input type="date" id="editCamisaData" value="${item.data || ''}"></div>
+        <div class="campo"><label>Observação</label><input type="text" id="editCamisaObs" value="${item.obs || ''}"></div>
     `;
     abrirModal('Editar Venda de Camiseta');
-}
-
-function atualizarTamanhoEditCamisa() {
-    const sel = document.getElementById('editCamisaTamanho');
-    if (sel) sel.innerHTML = (TAMANHOS_CAMISETA['Casual'] || []).map(x => `<option value="${x.t}">${x.t} (${x.ref})</option>`).join('');
 }
 
 // Estender salvarEdicao para camisetas
 const _salvarEdicaoAntesCamiseta = salvarEdicao;
 salvarEdicao = function() {
     if (edicaoAtual && edicaoAtual.tipo === 'camiseta') {
-        const novoTipo = document.getElementById('editCamisaTipo').value;
         const valorDigitado = document.getElementById('editCamisaValor').value;
         atualizarItem('camisetas', edicaoAtual.id, {
             nome: document.getElementById('editCamisaNome').value.trim(),
-            telefone: document.getElementById('editCamisaTelefone').value.trim(),
-            tipo: novoTipo,
-            modelagem: document.getElementById('editCamisaModelagem').value,
-            tamanho: document.getElementById('editCamisaTamanho').value,
-            valor: valorDigitado === '' ? 0 : parseFloat(valorDigitado) // valor manual (permite desconto)
+            tipo: document.getElementById('editCamisaTipo').value,
+            valor: valorDigitado === '' ? 0 : parseFloat(valorDigitado),
+            data: document.getElementById('editCamisaData').value,
+            obs: document.getElementById('editCamisaObs').value.trim(),
+            pago: true
         });
         fecharModal();
         renderizarCamisetas();
@@ -4590,202 +4489,101 @@ salvarEdicao = function() {
 
 function renderizarCamisetas() {
     if (!dados.camisetas) dados.camisetas = [];
-    if (!dados.configCamisetas) dados.configCamisetas = { precoTrabalhador: 0, precoPublico: 0 };
+    if (!dados.configCamisetas) dados.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
 
-    // Carregar config nos inputs
-    const cfgT = document.getElementById('cfgPrecoTrabalhador');
-    const cfgP = document.getElementById('cfgPrecoPublico');
-    const cfgCT = document.getElementById('cfgCustoTrabalhador');
-    const cfgCP = document.getElementById('cfgCustoPublico');
-    if (cfgT && document.activeElement !== cfgT) cfgT.value = dados.configCamisetas.precoTrabalhador || '';
-    if (cfgP && document.activeElement !== cfgP) cfgP.value = dados.configCamisetas.precoPublico || '';
-    if (cfgCT && document.activeElement !== cfgCT) cfgCT.value = dados.configCamisetas.custoTrabalhador || '';
-    if (cfgCP && document.activeElement !== cfgCP) cfgCP.value = dados.configCamisetas.custoPublico || '';
-    renderizarInputsEstoque();
-    atualizarTamanhosCamiseta();
+    // Setar data padrão (hoje) no campo se ainda estiver vazio
+    const dataEl = document.getElementById('camisaData');
+    if (dataEl && !dataEl.value) dataEl.value = new Date().toISOString().split('T')[0];
+
+    // Carregar config nos inputs (sem sobrescrever se estiver em foco)
+    const ids = ['cfgPrecoTrabalhador','cfgPrecoPublico','cfgCustoTrabalhador','cfgCustoPublico','cfgQtdTrabalhador','cfgQtdPublico'];
+    const cfgKeys = ['precoTrabalhador','precoPublico','custoTrabalhador','custoPublico','qtdTrabalhador','qtdPublico'];
+    ids.forEach((eid, i) => {
+        const el = document.getElementById(eid);
+        if (el && document.activeElement !== el) el.value = dados.configCamisetas[cfgKeys[i]] || '';
+    });
 
     const busca = (document.getElementById('buscaCamisa')?.value || '').toLowerCase();
     let lista = [...dados.camisetas];
     if (busca) lista = lista.filter(c => (c.nome||'').toLowerCase().includes(busca));
     if (filtroCamisa === 'trabalhador') lista = lista.filter(c => c.tipo === 'trabalhador');
     else if (filtroCamisa === 'publico') lista = lista.filter(c => c.tipo === 'publico');
-    else if (filtroCamisa === 'pago') lista = lista.filter(c => c.pago);
-    else if (filtroCamisa === 'pendente') lista = lista.filter(c => !c.pago);
-    lista.sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+    lista.sort((a,b) => (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||''));
 
     const tbody = document.querySelector('#tabelaCamisetas tbody');
     if (tbody) {
-        const grupos = agruparCamisetas(lista);
-        tbody.innerHTML = grupos.map(g => linhaGrupoCamiseta(g)).join('')
-            || '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:15px">Nenhuma camiseta registrada</td></tr>';
+        const TIPO_LABEL = { trabalhador: '👷 Trabalhador', publico: '👥 Público' };
+        tbody.innerHTML = lista.map(c => {
+            const qtd = qtdPorPagamento(c.valor || 0, c.tipo);
+            const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+            return `<tr>
+                <td>${dataFmt}</td>
+                <td style="font-weight:700">${c.nome || '-'}</td>
+                <td><span class="badge-categoria">${TIPO_LABEL[c.tipo] || c.tipo}</span></td>
+                <td style="text-align:center;font-weight:700">${qtd}</td>
+                <td>${c.valor > 0 ? 'R$ ' + fmt(c.valor) : '-'}</td>
+                <td style="opacity:0.7;font-size:0.82rem">${c.obs || '-'}</td>
+                <td style="white-space:nowrap">
+                    <button class="btn-edit" onclick="editarCamiseta(${c.id})" title="Editar">✏️</button>
+                    <button class="btn-delete" onclick="removerCamiseta(${c.id})" title="Remover">X</button>
+                </td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:15px">Nenhum registro de venda</td></tr>';
     }
 
+    // ---- Resumo por tipo ----
     const todas = dados.camisetas;
-    const totalTrab = todas.filter(c => c.tipo === 'trabalhador').length;
-    const totalPub = todas.filter(c => c.tipo === 'publico').length;
-    const totalValor = todas.reduce((s, c) => s + (c.valor||0), 0);
-    const totalPago = todas.filter(c => c.pago).reduce((s, c) => s + (c.valor||0), 0);
-    const totalCusto = todas.reduce((s, c) => s + custoPorTipoCamisa(c.tipo), 0);
-    const lucroEstimado = totalValor - totalCusto;
+    const cfg = dados.configCamisetas;
+
+    const resumoTipo = (tipo, labelTipo) => {
+        const vendas = todas.filter(c => c.tipo === tipo);
+        const totalRecebido = vendas.reduce((s, c) => s + (c.valor || 0), 0);
+        const qtdVendida = vendas.reduce((s, c) => s + qtdPorPagamento(c.valor || 0, tipo), 0);
+        const qtdDisp = estoqueConfigTipo(tipo);
+        const custoTotal = custoPorTipoCamisa(tipo);  // custo total do lote
+        const saldo = totalRecebido - custoTotal;
+        const peqb = pontosEquilibrio(tipo);
+        const falta = peqb !== null ? Math.max(0, peqb - qtdVendida) : null;
+        const qtdRestante = qtdDisp > 0 ? qtdDisp - qtdVendida : null;
+
+        return `
+            <div style="border:1px solid rgba(91,192,235,0.3);border-radius:12px;padding:12px 16px;min-width:260px;flex:1">
+                <div style="font-weight:700;font-size:1rem;color:var(--cor-amarelo);margin-bottom:8px">${labelTipo}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <div class="item neutro"><span>Qtd vendida</span><strong>${qtdVendida}</strong></div>
+                    <div class="item positivo"><span>Recebido</span><strong>${R$(totalRecebido)}</strong></div>
+                    ${qtdDisp > 0 ? `<div class="item neutro"><span>Disponível</span><strong>${qtdRestante !== null ? qtdRestante : '-'}</strong></div>` : ''}
+                    ${custoTotal > 0 ? `<div class="item negativo"><span>Custo lote</span><strong>${R$(custoTotal)}</strong></div>` : ''}
+                    ${custoTotal > 0 ? `<div class="item ${saldo >= 0 ? 'positivo' : 'negativo'}"><span>Saldo</span><strong style="color:${saldo >= 0 ? '#81c784' : '#ef5350'}">${R$(saldo)}</strong></div>` : ''}
+                    ${peqb !== null && falta !== null ? `<div class="item ${falta === 0 ? 'positivo' : 'neutro'}"><span>${falta === 0 ? '✅ Ponto de equilíbrio' : '⚠️ Faltam p/ equil.'}</span><strong>${falta === 0 ? 'Atingido!' : falta + ' un.'}</strong></div>` : ''}
+                </div>
+            </div>`;
+    };
+
+    const totalGeral = todas.reduce((s,c) => s + (c.valor||0), 0);
+    const qtdTotal = ['trabalhador','publico'].reduce((s, t) => s + todas.filter(c=>c.tipo===t).reduce((ss,c)=>ss+qtdPorPagamento(c.valor||0,t),0), 0);
+    const custoTotalGeral = (cfg.custoTrabalhador||0) + (cfg.custoPublico||0);
+    const saldoGeral = totalGeral - custoTotalGeral;
 
     const resumoEl = document.getElementById('resumoCamisetas');
     if (resumoEl) {
         resumoEl.innerHTML = `
-            <div class="item neutro"><span>Total Camisetas</span><strong>${todas.length}</strong></div>
-            <div class="item neutro"><span>Trabalhador</span><strong>${totalTrab}</strong></div>
-            <div class="item neutro"><span>Público</span><strong>${totalPub}</strong></div>
-            <div class="item positivo"><span>Valor Total (venda)</span><strong>${R$(totalValor)}</strong></div>
-            <div class="item positivo"><span>Recebido</span><strong>${R$(totalPago)}</strong></div>
-            <div class="item negativo"><span>A receber</span><strong>${R$(totalValor - totalPago)}</strong></div>
-            <div class="item negativo"><span>Custo Total</span><strong>${R$(totalCusto)}</strong></div>
-            <div class="item ${lucroEstimado >= 0 ? 'positivo' : 'negativo'}"><span>Lucro Estimado</span><strong>${R$(lucroEstimado)}</strong></div>
-        `;
+            <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+                ${resumoTipo('trabalhador', '👷 Trabalhador')}
+                ${resumoTipo('publico', '👥 Público em geral')}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <div class="item neutro"><span>Total camisetas</span><strong>${qtdTotal}</strong></div>
+                <div class="item positivo"><span>Total recebido</span><strong>${R$(totalGeral)}</strong></div>
+                ${custoTotalGeral > 0 ? `<div class="item negativo"><span>Custo total (lotes)</span><strong>${R$(custoTotalGeral)}</strong></div>` : ''}
+                ${custoTotalGeral > 0 ? `<div class="item ${saldoGeral>=0?'positivo':'negativo'}"><span>Saldo geral</span><strong style="color:${saldoGeral>=0?'#81c784':'#ef5350'}">${R$(saldoGeral)}</strong></div>` : ''}
+            </div>`;
     }
-
-    renderizarQtdPorTamanho();
-}
-
-// Agrupa camisetas iguais (nome+telefone+tipo+tamanho+valor+pago) para a tabela ficar enxuta
-function agruparCamisetas(lista) {
-    const mapa = {};
-    lista.forEach(c => {
-        const chave = [c.nome||'', c.telefone||'', c.tipo||'', c.tamanho||'', c.valor||0, c.pago?1:0].join('|');
-        if (!mapa[chave]) mapa[chave] = { ...c, qtd: 0, ids: [] };
-        mapa[chave].qtd++;
-        mapa[chave].ids.push(c.id);
-    });
-    return Object.values(mapa).sort((a,b) =>
-        (a.nome||'').localeCompare(b.nome||'') ||
-        (a.tipo||'').localeCompare(b.tipo||'') ||
-        TAMANHOS_LISTA.indexOf(a.tamanho) - TAMANHOS_LISTA.indexOf(b.tamanho) ||
-        (a.pago?1:0) - (b.pago?1:0)
-    );
-}
-
-// Monta a linha (agrupada) da tabela de camisetas
-function linhaGrupoCamiseta(g) {
-    const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    const valorUnit = g.valor || 0;
-    const valorTotal = valorUnit * g.qtd;
-    const idsStr = g.ids.join(',');
-    return `
-        <tr>
-            <td style="font-weight:700">${g.nome}</td>
-            <td>${g.telefone || '-'}</td>
-            <td><span class="badge-categoria">${TIPO_LABEL[g.tipo] || g.tipo}</span></td>
-            <td>${g.tamanho}</td>
-            <td style="text-align:center;font-weight:700">${g.qtd}</td>
-            <td>${valorUnit > 0 ? 'R$ ' + fmt(valorTotal) + (g.qtd > 1 ? `<br><small style="opacity:0.6">(${g.qtd}x R$ ${fmt(valorUnit)})</small>` : '') : '-'}</td>
-            <td><span class="${g.pago ? 'badge-pago' : 'badge-pendente'}" onclick="pagarGrupoCamiseta('${idsStr}')" style="cursor:pointer">${g.pago ? 'Pago' : 'Pendente'}</span></td>
-            <td style="white-space:nowrap">
-                <button class="btn-edit" onclick="editarCamiseta(${g.ids[0]})" title="Editar">✏️</button>
-                <button class="btn-delete" onclick="removerGrupoCamiseta('${idsStr}')" title="Remover">X</button>
-            </td>
-        </tr>`;
-}
-
-// Marca como pago/pendente. Se o grupo tem mais de 1 e está pendente, pergunta quantos pagar.
-function pagarGrupoCamiseta(idsStr) {
-    const ids = String(idsStr).split(',');
-    const itens = (dados.camisetas || []).filter(c => ids.includes(String(c.id)));
-    if (itens.length === 0) return;
-    const jaPago = itens[0].pago;
-
-    if (jaPago) {
-        // Grupo pago -> volta tudo para pendente
-        itens.forEach(c => atualizarItem('camisetas', c.id, { pago: false }));
-        renderizarCamisetas();
-        return;
-    }
-
-    // Grupo pendente
-    if (itens.length === 1) {
-        atualizarItem('camisetas', itens[0].id, { pago: true });
-        renderizarCamisetas();
-        return;
-    }
-
-    // Mais de um: pergunta quantos estão sendo pagos
-    const resp = prompt(`Quantas camisetas estão sendo pagas agora?\n(${itens.length} pendentes de ${itens[0].nome} - tamanho ${itens[0].tamanho})`, String(itens.length));
-    if (resp === null) return;
-    let n = parseInt(resp);
-    if (isNaN(n) || n <= 0) { alert('Digite um número válido.'); return; }
-    if (n > itens.length) n = itens.length;
-    for (let i = 0; i < n; i++) atualizarItem('camisetas', itens[i].id, { pago: true });
-    renderizarCamisetas();
-    mostrarToast(`✅ ${n} camiseta${n>1?'s':''} marcada${n>1?'s':''} como paga${n>1?'s':''}!`);
-}
-
-// Remove um grupo inteiro (pergunta quantas, se mais de uma)
-function removerGrupoCamiseta(idsStr) {
-    const ids = String(idsStr).split(',');
-    const itens = (dados.camisetas || []).filter(c => ids.includes(String(c.id)));
-    if (itens.length === 0) return;
-    if (itens.length === 1) {
-        if (!confirm('Remover esta camiseta?')) return;
-        removerItem('camisetas', itens[0].id);
-        renderizarCamisetas();
-        return;
-    }
-    const resp = prompt(`Quantas remover? (${itens.length} de ${itens[0].nome} - tamanho ${itens[0].tamanho})\nDigite o número, ou "tudo" para remover todas.`, 'tudo');
-    if (resp === null) return;
-    let n;
-    if (String(resp).trim().toLowerCase() === 'tudo') n = itens.length;
-    else { n = parseInt(resp); if (isNaN(n) || n <= 0) { alert('Digite um número válido ou "tudo".'); return; } }
-    if (n > itens.length) n = itens.length;
-    for (let i = 0; i < n; i++) removerItem('camisetas', itens[i].id);
-    renderizarCamisetas();
-    mostrarToast(`${n} camiseta${n>1?'s':''} removida${n>1?'s':''}.`);
-}
-
-// Quantidade vendida por tamanho (separado por modelagem)
-function renderizarQtdPorTamanho() {
-    const el = document.getElementById('camisetasPorTamanho');
-    if (!el) return;
-    el.innerHTML = blocoQtdPorTamanho();
-}
-
-// HTML do quadro "por tamanho", separado por tipo (Trabalhador / Público)
-function blocoQtdPorTamanho() {
-    const todas = dados.camisetas || [];
-    const est = (dados.configCamisetas && dados.configCamisetas.estoque) || {};
-    if (todas.length === 0 && !temAlgumEstoque(est)) return '';
-
-    const blocoTipo = (tipo, titulo) => {
-        const estTipo = est[tipo] || {};
-        const temEstoque = Object.values(estTipo).some(v => (v || 0) > 0);
-        const doTipo = todas.filter(c => c.tipo === tipo);
-        if (doTipo.length === 0 && !temEstoque) return '';
-        let inner = '';
-        TAMANHOS_LISTA.forEach(t => {
-            const vend = doTipo.filter(c => c.tamanho === t).length;
-            const disp = estTipo[t] || 0;
-            if (!temEstoque && vend === 0) return;
-            const restante = disp - vend;
-            let cor = 'rgba(91,192,235,0.15)', borda = 'rgba(91,192,235,0.4)';
-            if (temEstoque && disp > 0) {
-                if (restante < 0) { cor = 'rgba(239,83,80,0.22)'; borda = 'rgba(239,83,80,0.6)'; }
-                else if (restante === 0) { cor = 'rgba(239,83,80,0.15)'; borda = 'rgba(239,83,80,0.4)'; }
-                else if (restante <= 2) { cor = 'rgba(255,179,0,0.18)'; borda = 'rgba(255,179,0,0.5)'; }
-            }
-            const label = temEstoque ? `${vend}/${disp}` + (restante < 0 ? ` (${restante})` : '') : `${vend}`;
-            inner += `<span style="background:${cor};border:1px solid ${borda};border-radius:8px;padding:6px 12px;font-size:0.9rem"><strong style="color:var(--cor-amarelo)">${t}</strong>: ${label}</span>`;
-        });
-        if (!inner) return '';
-        return `<div class="tabela-box" style="margin-bottom:12px">
-            <h4>${titulo} — ${doTipo.length} camiseta${doTipo.length!==1?'s':''}${temEstoque ? ' (vendidas / disponíveis)' : ''}</h4>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">${inner}</div>
-        </div>`;
-    };
-    return blocoTipo('trabalhador', '👷 Trabalhador') + blocoTipo('publico', '👥 Público em geral');
-}
-function temAlgumEstoque(est) {
-    return ['trabalhador','publico'].some(tp => est[tp] && Object.values(est[tp]).some(v => (v||0) > 0));
 }
 
 function exportarCamisetasPDF() {
     const lista = dados.camisetas || [];
-    if (lista.length === 0) { alert('Nenhuma camiseta registrada'); return; }
+    if (lista.length === 0) { alert('Nenhuma venda de camiseta registrada'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const pageW = doc.internal.pageSize.getWidth();
@@ -4799,36 +4597,30 @@ function exportarCamisetasPDF() {
     doc.text(cfg.datas, pageW / 2, y, { align: 'center' }); y += 12;
 
     const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    const grupos = agruparCamisetas(lista);
+    const ordenada = [...lista].sort((a,b) => (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||''));
+
     doc.autoTable({
         startY: y, theme: 'grid',
         headStyles: { fillColor: [91, 192, 235], textColor: [255,255,255], fontSize: 9 },
         bodyStyles: { fontSize: 8 },
         styles: { overflow: 'linebreak', cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 46 }, 1: { cellWidth: 30 }, 2: { cellWidth: 26 }, 3: { cellWidth: 18 }, 4: { cellWidth: 14 }, 5: { cellWidth: 26 }, 6: { cellWidth: 24 } },
-        head: [['Nome', 'Telefone', 'Tipo', 'Tam.', 'Qtd', 'Valor', 'Status']],
-        body: grupos.map(g => {
-            const valorTotal = (g.valor || 0) * g.qtd;
-            return [
-                g.nome || '-', g.telefone || '-', TIPO_LABEL[g.tipo] || g.tipo,
-                g.tamanho || '-', String(g.qtd),
-                valorTotal > 0 ? 'R$ ' + fmt(valorTotal) : '-',
-                g.pago ? 'Pago' : 'Pendente'
-            ];
+        columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 55 }, 2: { cellWidth: 30 }, 3: { cellWidth: 16 }, 4: { cellWidth: 26 }, 5: { cellWidth: 40 } },
+        head: [['Data', 'Nome', 'Tipo', 'Qtd', 'Valor', 'Obs']],
+        body: ordenada.map(c => {
+            const qtd = qtdPorPagamento(c.valor || 0, c.tipo);
+            const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+            return [dataFmt, c.nome || '-', TIPO_LABEL[c.tipo] || c.tipo, String(qtd), c.valor > 0 ? 'R$ ' + fmt(c.valor) : '-', c.obs || '-'];
         })
     });
     y = doc.lastAutoTable.finalY + 8;
-    const totalValor = lista.reduce((s,c) => s + (c.valor||0), 0);
-    const totalPago = lista.filter(c => c.pago).reduce((s,c) => s + (c.valor||0), 0);
-    const totalCusto = lista.reduce((s,c) => s + custoPorTipoCamisa(c.tipo), 0);
-    const lucroEstimado = totalValor - totalCusto;
+
+    const totalVal = lista.reduce((s,c) => s + (c.valor||0), 0);
+    const qtdTrab = lista.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
+    const qtdPub = lista.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
+    const custo = (dados.configCamisetas?.custoTrabalhador||0) + (dados.configCamisetas?.custoPublico||0);
     doc.setFontSize(9); doc.setTextColor(80);
-    const linha1 = `Total: ${lista.length} camisetas | Trabalhador: ${lista.filter(c=>c.tipo==='trabalhador').length} | Público: ${lista.filter(c=>c.tipo==='publico').length}`;
-    const linha2 = `Valor total (venda): R$ ${fmt(totalValor)} | Recebido: R$ ${fmt(totalPago)} | A receber: R$ ${fmt(totalValor-totalPago)}`;
-    const linha3 = `Custo total: R$ ${fmt(totalCusto)} | Lucro estimado: R$ ${fmt(lucroEstimado)}`;
-    doc.text(linha1, 14, y); y += 5;
-    doc.text(linha2, 14, y); y += 5;
-    doc.text(linha3, 14, y);
+    doc.text(`Total: ${qtdTrab+qtdPub} camisetas | Trabalhador: ${qtdTrab} | Público: ${qtdPub}`, 14, y); y += 5;
+    doc.text(`Total recebido: R$ ${fmt(totalVal)}${custo > 0 ? ' | Custo lotes: R$ ' + fmt(custo) + ' | Saldo: R$ ' + fmt(totalVal - custo) : ''}`, 14, y);
 
     doc.save('camisetas_padroeira.pdf');
     mostrarToast('📄 Lista de camisetas exportada!');
@@ -4836,13 +4628,13 @@ function exportarCamisetasPDF() {
 
 function exportarCamisetasCSV() {
     const lista = dados.camisetas || [];
-    if (lista.length === 0) { alert('Nenhuma camiseta registrada'); return; }
+    if (lista.length === 0) { alert('Nenhuma venda de camiseta registrada'); return; }
     const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    let csv = 'Nome;Telefone;Tipo;Tamanho;Qtd;Valor Unitário;Valor Total;Status\n';
-    agruparCamisetas(lista).forEach(g => {
-        const unit = g.valor || 0;
-        const total = unit * g.qtd;
-        csv += `${g.nome||''};${g.telefone||''};${TIPO_LABEL[g.tipo]||g.tipo};${g.tamanho||''};${g.qtd};${unit > 0 ? fmt(unit) : ''};${total > 0 ? fmt(total) : ''};${g.pago ? 'Pago' : 'Pendente'}\n`;
+    let csv = 'Data;Nome;Tipo;Qtd;Valor Pago;Obs\n';
+    [...lista].sort((a,b) => (b.data||'').localeCompare(a.data||'')).forEach(c => {
+        const qtd = qtdPorPagamento(c.valor||0, c.tipo);
+        const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+        csv += `${dataFmt};${c.nome||''};${TIPO_LABEL[c.tipo]||c.tipo};${qtd};${c.valor > 0 ? fmt(c.valor) : ''};${c.obs||''}\n`;
     });
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');

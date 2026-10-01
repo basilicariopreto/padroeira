@@ -903,40 +903,39 @@
         <!-- CAMISETAS -->
         <section id="sec-camisetas" class="section">
             <h2>👕 Venda de Camisetas</h2>
-            <p class="secao-desc">Registre as vendas de camisetas. Configure os preços (Trabalhador e Público). O valor é preenchido automaticamente conforme o tipo.</p>
+            <p class="secao-desc">Registre as vendas de camisetas por pagamento. O valor pago determina a quantidade automaticamente.</p>
 
-            <!-- Config de preços -->
+            <!-- Config de preços e estoque -->
             <div class="painel-madeira" style="margin-bottom:15px">
-                <h3>Configuração de Preços</h3>
-                <div class="form-row" style="align-items:flex-end">
+                <h3>Configuração</h3>
+                <div class="form-row" style="align-items:flex-end;flex-wrap:wrap;gap:10px">
                     <div>
                         <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Venda Trabalhador R$</label>
-                        <input type="number" id="cfgPrecoTrabalhador" placeholder="0,00" step="0.01" min="0" style="width:120px">
+                        <input type="number" id="cfgPrecoTrabalhador" placeholder="0,00" step="0.01" min="0" style="width:130px">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Custo Trabalhador R$</label>
-                        <input type="number" id="cfgCustoTrabalhador" placeholder="0,00" step="0.01" min="0" style="width:120px">
+                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Custo lote Trabalhador R$</label>
+                        <input type="number" id="cfgCustoTrabalhador" placeholder="0,00" step="0.01" min="0" style="width:130px">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Qtd disponível Trabalhador</label>
+                        <input type="number" id="cfgQtdTrabalhador" placeholder="0" min="0" style="width:130px">
                     </div>
                     <div>
                         <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Venda Público R$</label>
-                        <input type="number" id="cfgPrecoPublico" placeholder="0,00" step="0.01" min="0" style="width:120px">
+                        <input type="number" id="cfgPrecoPublico" placeholder="0,00" step="0.01" min="0" style="width:130px">
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Custo Público R$</label>
-                        <input type="number" id="cfgCustoPublico" placeholder="0,00" step="0.01" min="0" style="width:120px">
+                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Custo lote Público R$</label>
+                        <input type="number" id="cfgCustoPublico" placeholder="0,00" step="0.01" min="0" style="width:130px">
                     </div>
-                    <button class="btn-venda" onclick="salvarConfigCamisetas()">Salvar Preços</button>
+                    <div>
+                        <label style="display:block;font-size:0.8rem;color:var(--cor-palha);font-weight:600;margin-bottom:3px">Qtd disponível Público</label>
+                        <input type="number" id="cfgQtdPublico" placeholder="0" min="0" style="width:130px">
+                    </div>
+                    <button class="btn-venda" onclick="salvarConfigCamisetas()">Salvar Config</button>
                 </div>
-            </div>
-
-            <!-- Estoque disponível por tamanho -->
-            <div class="painel-madeira" style="margin-bottom:15px">
-                <h3>Estoque disponível por tamanho</h3>
-                <p class="secao-desc">Defina quantas camisetas há de cada tamanho, separado por Trabalhador e Público. Deixe 0 (ou vazio) se não quiser controlar. Por enquanto a venda NÃO é bloqueada ao esgotar — o quadro apenas mostra a quantidade (ficando negativa se passar). Mais perto da festa dá pra ativar o bloqueio.</p>
-                <div id="estoqueCamisetasInputs"></div>
-                <div class="form-row">
-                    <button class="btn-venda" onclick="salvarConfigCamisetas()">Salvar Estoque</button>
-                </div>
+                <p class="secao-desc" style="margin-top:8px">Custo lote = valor total pago pelas camisetas (ex: R$ 2.000 por 100 peças). Qtd disponível = total de peças para vender.</p>
             </div>
 
             <!-- Registrar venda -->
@@ -944,23 +943,19 @@
                 <h3>Registrar Venda</h3>
                 <div class="form-row">
                     <input type="text" id="camisaNome" placeholder="Nome da pessoa" style="flex:2;min-width:180px">
-                    <input type="tel" id="camisaTelefone" placeholder="Telefone (opcional)" style="flex:1;min-width:150px">
-                </div>
-                <div class="form-row">
-                    <select id="camisaTipo" onchange="atualizarPrecoCamiseta()">
+                    <select id="camisaTipo" onchange="atualizarInfoQtdCamisa()" style="flex:1;min-width:160px">
                         <option value="">Tipo de comprador...</option>
-                        <option value="trabalhador">Trabalhador</option>
-                        <option value="publico">Público em geral</option>
+                        <option value="trabalhador">👷 Trabalhador</option>
+                        <option value="publico">👥 Público em geral</option>
                     </select>
-                    <input type="hidden" id="camisaModelagem" value="Casual">
-                </div>
-                <div style="margin:6px 0 4px;font-size:0.85rem;color:var(--cor-palha);font-weight:600">Quantidade por tamanho:</div>
-                <div class="form-row" id="gradeTamanhosCamisa" style="flex-wrap:wrap;gap:10px">
-                    <span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>
                 </div>
                 <div class="form-row">
-                    <span id="camisaPrecoInfo" style="font-size:0.9rem;color:#81c784;font-weight:700"></span>
-                    <label class="checkbox-opt"><input type="checkbox" id="camisaPago" checked> Já pagou</label>
+                    <input type="number" id="camisaValorPago" placeholder="Valor pago R$" step="0.01" min="0" oninput="atualizarInfoQtdCamisa()" style="width:150px;flex:0 0 150px">
+                    <input type="date" id="camisaData" style="flex:0 0 auto">
+                    <input type="text" id="camisaObs" placeholder="Observação (opcional)" style="flex:2">
+                </div>
+                <div class="form-row">
+                    <span id="camisaInfoQtd" style="font-size:0.9rem;font-weight:700"></span>
                     <button class="btn-venda" onclick="registrarCamiseta()">Registrar Venda</button>
                 </div>
             </div>
@@ -976,18 +971,15 @@
                 <button class="filtro-btn active" data-filtrocamisa="todos" onclick="filtrarCamisetas('todos')">Todas</button>
                 <button class="filtro-btn" data-filtrocamisa="trabalhador" onclick="filtrarCamisetas('trabalhador')">Trabalhador</button>
                 <button class="filtro-btn" data-filtrocamisa="publico" onclick="filtrarCamisetas('publico')">Público</button>
-                <button class="filtro-btn" data-filtrocamisa="pago" onclick="filtrarCamisetas('pago')">Pagos</button>
-                <button class="filtro-btn" data-filtrocamisa="pendente" onclick="filtrarCamisetas('pendente')">Pendentes</button>
             </div>
 
             <div class="tabela-box">
                 <table id="tabelaCamisetas">
-                    <thead><tr><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Tamanho</th><th>Qtd</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Data</th><th>Nome</th><th>Tipo</th><th>Qtd</th><th>Valor</th><th>Obs</th><th></th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
             <div class="resumo-barraca" id="resumoCamisetas"></div>
-            <div id="camisetasPorTamanho" style="margin-top:15px"></div>
         </section>
 
         <!-- QR CODES -->

@@ -40,29 +40,25 @@
 
     <main class="container">
         <section class="section active">
-            <p class="secao-desc">Registre as vendas de camisetas. O valor é preenchido automaticamente conforme o tipo. <strong id="contadorRegistros"></strong></p>
+            <p class="secao-desc">Registre as vendas de camisetas. Informe o nome, tipo e o valor pago. A quantidade é calculada automaticamente. <strong id="contadorRegistros"></strong></p>
 
             <div class="painel-madeira">
                 <h3>Registrar Venda de Camiseta</h3>
                 <div class="form-row">
                     <input type="text" id="camisaNome" placeholder="Nome da pessoa" style="flex:2;min-width:180px">
-                    <input type="tel" id="camisaTelefone" placeholder="Telefone (opcional)" style="flex:1;min-width:150px">
-                </div>
-                <div class="form-row">
-                    <select id="camisaTipo" onchange="atualizarPrecoCamiseta()">
+                    <select id="camisaTipo" onchange="atualizarInfoQtdCamisa()" style="flex:1;min-width:160px">
                         <option value="">Tipo de comprador...</option>
-                        <option value="trabalhador">Trabalhador</option>
-                        <option value="publico">Público em geral</option>
+                        <option value="trabalhador">👷 Trabalhador</option>
+                        <option value="publico">👥 Público em geral</option>
                     </select>
-                    <input type="hidden" id="camisaModelagem" value="Casual">
-                </div>
-                <div style="margin:6px 0 4px;font-size:0.85rem;color:var(--cor-palha);font-weight:600">Quantidade por tamanho:</div>
-                <div class="form-row" id="gradeTamanhosCamisa" style="flex-wrap:wrap;gap:10px">
-                    <span style="opacity:0.6;font-size:0.85rem">Selecione o tipo de comprador para lançar as quantidades por tamanho.</span>
                 </div>
                 <div class="form-row">
-                    <span id="camisaPrecoInfo" style="font-size:0.9rem;color:#81c784;font-weight:700"></span>
-                    <label class="checkbox-opt"><input type="checkbox" id="camisaPago" checked> Já pagou</label>
+                    <input type="number" id="camisaValorPago" placeholder="Valor pago R$" step="0.01" min="0" oninput="atualizarInfoQtdCamisa()" style="width:150px;flex:0 0 150px">
+                    <input type="date" id="camisaData" style="flex:0 0 auto">
+                    <input type="text" id="camisaObs" placeholder="Observação (opcional)" style="flex:2">
+                </div>
+                <div class="form-row">
+                    <span id="camisaInfoQtd" style="font-size:0.9rem;font-weight:700"></span>
                     <button class="btn-venda" onclick="registrarCamiseta()">Registrar Venda</button>
                 </div>
             </div>
@@ -72,18 +68,15 @@
                 <button class="filtro-btn active" data-filtrocamisa="todos" onclick="filtrarCamisetas('todos')">Todas</button>
                 <button class="filtro-btn" data-filtrocamisa="trabalhador" onclick="filtrarCamisetas('trabalhador')">Trabalhador</button>
                 <button class="filtro-btn" data-filtrocamisa="publico" onclick="filtrarCamisetas('publico')">Público</button>
-                <button class="filtro-btn" data-filtrocamisa="pago" onclick="filtrarCamisetas('pago')">Pagos</button>
-                <button class="filtro-btn" data-filtrocamisa="pendente" onclick="filtrarCamisetas('pendente')">Pendentes</button>
             </div>
 
             <div class="tabela-box">
                 <table id="tabelaCamisetas">
-                    <thead><tr><th>Nome</th><th>Telefone</th><th>Tipo</th><th>Tamanho</th><th>Qtd</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Data</th><th>Nome</th><th>Tipo</th><th>Qtd</th><th>Obs</th><th></th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
             <div class="resumo-barraca" id="resumoCamisetas"></div>
-            <div id="camisetasPorTamanho" style="margin-top:15px"></div>
         </section>
     </main>
 
