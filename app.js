@@ -2293,7 +2293,7 @@ function gerarPDFComLogo(logoBase64) {
         const totCamis = camisetasPDF.reduce((s,c)=>s+(c.valor||0),0);
         const qtdTrabPDF = camisetasPDF.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
         const qtdPubPDF = camisetasPDF.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
-        const totCustoCamis = (dados.configCamisetas?.custoTrabalhador||0) + (dados.configCamisetas?.custoPublico||0);
+        const totCustoCamis = custoPorTipoCamisa('trabalhador') + custoPorTipoCamisa('publico');
         const lucroCamis = totCamis - totCustoCamis;
         doc.setFontSize(9); doc.setTextColor(80);
         doc.text(`Total: ${qtdTrabPDF+qtdPubPDF} camisetas | Trabalhador: ${qtdTrabPDF} | Público: ${qtdPubPDF} | Recebido: R$ ${fmt(totCamis)}`, 14, y); y += 5;
@@ -4328,7 +4328,16 @@ function precoPorTipoCamisa(tipo) {
 }
 
 function custoPorTipoCamisa(tipo) {
-    const cfg = dados.configCamisetas || { custoTrabalhador: 0, custoPublico: 0 };
+    const cfg = dados.configCamisetas || { custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
+    // custoTrabalhador/custoPublico agora são CUSTO UNITÁRIO por peça
+    // custo total do lote = custo unitário × quantidade disponível
+    if (tipo === 'trabalhador') return (cfg.custoTrabalhador || 0) * (cfg.qtdTrabalhador || 0);
+    return (cfg.custoPublico || 0) * (cfg.qtdPublico || 0);
+}
+
+// Custo unitário por peça (usado no ponto de equilíbrio)
+function custoUnitarioCamisa(tipo) {
+    const cfg = dados.configCamisetas || {};
     return tipo === 'trabalhador' ? (cfg.custoTrabalhador || 0) : (cfg.custoPublico || 0);
 }
 
@@ -4352,13 +4361,16 @@ function estoqueConfigTipo(tipo) {
     return tipo === 'trabalhador' ? (cfg.qtdTrabalhador || 0) : (cfg.qtdPublico || 0);
 }
 
-// Quantas peças faltam vender para cobrir o custo (ponto de equilíbrio)
+// Quantas peças faltam vender para cobrir o custo do lote (ponto de equilíbrio)
 function pontosEquilibrio(tipo) {
     const cfg = dados.configCamisetas || {};
-    const custo = tipo === 'trabalhador' ? (cfg.custoTrabalhador || 0) : (cfg.custoPublico || 0);
+    const custoUnit = tipo === 'trabalhador' ? (cfg.custoTrabalhador || 0) : (cfg.custoPublico || 0);
+    const qtdDisp = estoqueConfigTipo(tipo);
     const preco = precoPorTipoCamisa(tipo);
-    if (!preco) return null;
-    return Math.ceil(custo / preco);
+    if (!preco || !custoUnit || !qtdDisp) return null;
+    // Custo total do lote ÷ preço unitário de venda
+    const custoLoteTotal = custoUnit * qtdDisp;
+    return Math.ceil(custoLoteTotal / preco);
 }
 
 function salvarConfigCamisetas() {
@@ -4437,6 +4449,16 @@ function atualizarInfoQtdCamisa() {
 function removerCamiseta(id) {
     if (!confirm('Remover este registro?')) return;
     removerItem('camisetas', id);
+    renderizarCamisetas();
+}
+
+function limparTodosCamisetas() {
+    if (!confirm('⚠️ Atenção: isso vai apagar TODOS os registros de venda de camisetas.\n\nEssa ação não pode ser desfeita. Confirma?')) return;
+    // Remove item a item para o Firebase refletir corretamente
+    const ids = (dados.camisetas || []).map(c => c.id);
+    if (ids.length === 0) { mostrarToast('Nenhum registro para apagar.'); return; }
+    ids.forEach(id => removerItem('camisetas', id));
+    mostrarToast(`🗑️ ${ids.length} registro${ids.length>1?'s':''} apagado${ids.length>1?'s':''}.`);
     renderizarCamisetas();
 }
 
@@ -4540,8 +4562,9 @@ function renderizarCamisetas() {
         const totalRecebido = vendas.reduce((s, c) => s + (c.valor || 0), 0);
         const qtdVendida = vendas.reduce((s, c) => s + qtdPorPagamento(c.valor || 0, tipo), 0);
         const qtdDisp = estoqueConfigTipo(tipo);
-        const custoTotal = custoPorTipoCamisa(tipo);  // custo total do lote
-        const saldo = totalRecebido - custoTotal;
+        const custoLote = custoPorTipoCamisa(tipo);  // custo unitário × qtd disponível
+        const custoUnit = custoUnitarioCamisa(tipo);
+        const saldo = totalRecebido - custoLote;
         const peqb = pontosEquilibrio(tipo);
         const falta = peqb !== null ? Math.max(0, peqb - qtdVendida) : null;
         const qtdRestante = qtdDisp > 0 ? qtdDisp - qtdVendida : null;
@@ -4553,8 +4576,9 @@ function renderizarCamisetas() {
                     <div class="item neutro"><span>Qtd vendida</span><strong>${qtdVendida}</strong></div>
                     <div class="item positivo"><span>Recebido</span><strong>${R$(totalRecebido)}</strong></div>
                     ${qtdDisp > 0 ? `<div class="item neutro"><span>Disponível</span><strong>${qtdRestante !== null ? qtdRestante : '-'}</strong></div>` : ''}
-                    ${custoTotal > 0 ? `<div class="item negativo"><span>Custo lote</span><strong>${R$(custoTotal)}</strong></div>` : ''}
-                    ${custoTotal > 0 ? `<div class="item ${saldo >= 0 ? 'positivo' : 'negativo'}"><span>Saldo</span><strong style="color:${saldo >= 0 ? '#81c784' : '#ef5350'}">${R$(saldo)}</strong></div>` : ''}
+                    ${custoUnit > 0 ? `<div class="item neutro"><span>Custo unit.</span><strong>${R$(custoUnit)}</strong></div>` : ''}
+                    ${custoLote > 0 ? `<div class="item negativo"><span>Custo lote</span><strong>${R$(custoLote)}</strong></div>` : ''}
+                    ${custoLote > 0 ? `<div class="item ${saldo >= 0 ? 'positivo' : 'negativo'}"><span>Saldo</span><strong style="color:${saldo >= 0 ? '#81c784' : '#ef5350'}">${R$(saldo)}</strong></div>` : ''}
                     ${peqb !== null && falta !== null ? `<div class="item ${falta === 0 ? 'positivo' : 'neutro'}"><span>${falta === 0 ? '✅ Ponto de equilíbrio' : '⚠️ Faltam p/ equil.'}</span><strong>${falta === 0 ? 'Atingido!' : falta + ' un.'}</strong></div>` : ''}
                 </div>
             </div>`;
@@ -4562,7 +4586,7 @@ function renderizarCamisetas() {
 
     const totalGeral = todas.reduce((s,c) => s + (c.valor||0), 0);
     const qtdTotal = ['trabalhador','publico'].reduce((s, t) => s + todas.filter(c=>c.tipo===t).reduce((ss,c)=>ss+qtdPorPagamento(c.valor||0,t),0), 0);
-    const custoTotalGeral = (cfg.custoTrabalhador||0) + (cfg.custoPublico||0);
+    const custoTotalGeral = custoPorTipoCamisa('trabalhador') + custoPorTipoCamisa('publico');
     const saldoGeral = totalGeral - custoTotalGeral;
 
     const resumoEl = document.getElementById('resumoCamisetas');
@@ -4617,7 +4641,7 @@ function exportarCamisetasPDF() {
     const totalVal = lista.reduce((s,c) => s + (c.valor||0), 0);
     const qtdTrab = lista.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
     const qtdPub = lista.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
-    const custo = (dados.configCamisetas?.custoTrabalhador||0) + (dados.configCamisetas?.custoPublico||0);
+    const custo = custoPorTipoCamisa('trabalhador') + custoPorTipoCamisa('publico');
     doc.setFontSize(9); doc.setTextColor(80);
     doc.text(`Total: ${qtdTrab+qtdPub} camisetas | Trabalhador: ${qtdTrab} | Público: ${qtdPub}`, 14, y); y += 5;
     doc.text(`Total recebido: R$ ${fmt(totalVal)}${custo > 0 ? ' | Custo lotes: R$ ' + fmt(custo) + ' | Saldo: R$ ' + fmt(totalVal - custo) : ''}`, 14, y);
