@@ -1,6 +1,26 @@
 // ===== PÁGINA VENDA DE CAMISETAS =====
 let edicaoCamisaId = null;
 let filtroCamisa = 'todos';
+let filtroCamisaDia = 'todos';
+
+function atualizarBotoesDiaCamisa() {
+    const container = document.getElementById('filtrosDiaCamisa');
+    if (!container) return;
+    const dias = [...new Set((dados.camisetas || []).map(c => c.data).filter(Boolean))].sort();
+    if (dias.length === 0) { container.innerHTML = ''; return; }
+    const btns = dias.map(d => {
+        const label = d.split('-').reverse().join('/');
+        const ativo = filtroCamisaDia === d ? 'active' : '';
+        return `<button class="filtro-btn ${ativo}" data-filtrocamisadia="${d}" onclick="filtrarCamisetasDia('${d}')">${label}</button>`;
+    }).join('');
+    container.innerHTML =
+        `<button class="filtro-btn ${filtroCamisaDia === 'todos' ? 'active' : ''}" data-filtrocamisadia="todos" onclick="filtrarCamisetasDia('todos')">Todos</button>` + btns;
+}
+
+function filtrarCamisetasDia(d) {
+    filtroCamisaDia = d;
+    renderizarPagina();
+}
 
 function precoPorTipo(tipo) {
     const cfg = dados.configCamisetas || { precoTrabalhador: 0, precoPublico: 0 };
@@ -131,9 +151,11 @@ function renderizarPagina() {
     const busca = (document.getElementById('buscaCamisa')?.value || '').toLowerCase();
 
     let lista = [...dados.camisetas];
+    atualizarBotoesDiaCamisa();
     if (busca) lista = lista.filter(c => (c.nome||'').toLowerCase().includes(busca));
     if (filtroCamisa === 'trabalhador') lista = lista.filter(c => c.tipo === 'trabalhador');
     else if (filtroCamisa === 'publico') lista = lista.filter(c => c.tipo === 'publico');
+    if (filtroCamisaDia !== 'todos') lista = lista.filter(c => (c.data || '') === filtroCamisaDia);
     lista.sort((a,b) => (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||''));
 
     const tbody = document.querySelector('#tabelaCamisetas tbody');

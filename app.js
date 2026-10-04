@@ -4320,6 +4320,7 @@ function itens_ordenar(lista) {
 
 // ===== VENDA DE CAMISETAS =====
 let filtroCamisa = 'todos';
+let filtroCamisaDia = 'todos';
 let edicaoCamisaId = null;
 
 function precoPorTipoCamisa(tipo) {
@@ -4470,6 +4471,29 @@ function filtrarCamisetas(f) {
     renderizarCamisetas();
 }
 
+function filtrarCamisetasDia(d) {
+    filtroCamisaDia = d;
+    document.querySelectorAll('[data-filtrocamisadia]').forEach(b => b.classList.remove('active'));
+    const btn = document.querySelector(`[data-filtrocamisadia="${d}"]`);
+    if (btn) btn.classList.add('active');
+    renderizarCamisetas();
+}
+
+function atualizarBotoesDiaCamisa() {
+    const container = document.getElementById('filtrosDiaCamisa');
+    if (!container) return;
+    // Coleta dias distintos dos registros, ordena
+    const dias = [...new Set((dados.camisetas || []).map(c => c.data).filter(Boolean))].sort();
+    if (dias.length === 0) { container.innerHTML = ''; return; }
+    const btns = dias.map(d => {
+        const label = d.split('-').reverse().join('/'); // 2026-10-03 → 03/10/2026
+        const ativo = filtroCamisaDia === d ? 'active' : '';
+        return `<button class="filtro-btn ${ativo}" data-filtrocamisadia="${d}" onclick="filtrarCamisetasDia('${d}')">${label}</button>`;
+    }).join('');
+    container.innerHTML =
+        `<button class="filtro-btn ${filtroCamisaDia === 'todos' ? 'active' : ''}" data-filtrocamisadia="todos" onclick="filtrarCamisetasDia('todos')">Todos</button>` + btns;
+}
+
 function editarCamiseta(id) {
     const item = (dados.camisetas || []).find(c => String(c.id) === String(id));
     if (!item) return;
@@ -4527,9 +4551,11 @@ function renderizarCamisetas() {
 
     const busca = (document.getElementById('buscaCamisa')?.value || '').toLowerCase();
     let lista = [...dados.camisetas];
+    atualizarBotoesDiaCamisa();
     if (busca) lista = lista.filter(c => (c.nome||'').toLowerCase().includes(busca));
     if (filtroCamisa === 'trabalhador') lista = lista.filter(c => c.tipo === 'trabalhador');
     else if (filtroCamisa === 'publico') lista = lista.filter(c => c.tipo === 'publico');
+    if (filtroCamisaDia !== 'todos') lista = lista.filter(c => (c.data || '') === filtroCamisaDia);
     lista.sort((a,b) => (b.data||'').localeCompare(a.data||'') || (a.nome||'').localeCompare(b.nome||''));
 
     const tbody = document.querySelector('#tabelaCamisetas tbody');
