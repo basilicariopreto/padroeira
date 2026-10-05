@@ -187,6 +187,7 @@ function normalizarDados(d) {
         if (!c.data) c.data = new Date().toISOString().split('T')[0];
         if (c.pago === undefined) c.pago = true;
         if (!c.valor) c.valor = 0;
+        if (!c.pagamento) c.pagamento = 'pix';
     });
     if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
     if (d.configCamisetas.qtdTrabalhador === undefined) d.configCamisetas.qtdTrabalhador = 0;
@@ -4412,8 +4413,9 @@ function registrarCamiseta() {
         id: Date.now(),
         nome,
         tipo,
-        valor: valorPago,  // 'valor' mantido para compatibilidade com receita/relatórios
-        pago: true,         // sempre pago (é o valor já recebido)
+        valor: valorPago,
+        pago: true,
+        pagamento: document.getElementById('camisaPagamento') ? document.getElementById('camisaPagamento').value : 'pix',
         obs,
         data: data || new Date().toISOString().split('T')[0]
     });
@@ -4423,9 +4425,12 @@ function registrarCamiseta() {
     document.getElementById('camisaValorPago').value = '';
     document.getElementById('camisaObs').value = '';
     document.getElementById('camisaInfoQtd').textContent = '';
+    const pgto = document.getElementById('camisaPagamento');
+    if (pgto) pgto.value = 'pix';
     renderizarCamisetas();
+    const pgtoLabel = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão' };
     mostrarToast(`✅ ${qtd} camiseta${qtd>1?'s':''} de ${nome} registrada${qtd>1?'s':''}!`);
-    registrarAcao(`Camisetas: ${nome} (${tipo === 'trabalhador' ? 'Trabalhador' : 'Público'}) — R$ ${fmt(valorPago)} = ${qtd} un.`);
+    registrarAcao(`Camisetas: ${nome} (${tipo === 'trabalhador' ? 'Trabalhador' : 'Público'}) — R$ ${fmt(valorPago)} = ${qtd} un. [${pgtoLabel[document.getElementById('camisaPagamento')?.value] || 'Pix'}]`);
 }
 
 // Atualiza o texto de prévia da quantidade ao digitar valor
@@ -4507,6 +4512,13 @@ function editarCamiseta(id) {
             </select>
         </div>
         <div class="campo"><label>Valor pago R$</label><input type="number" id="editCamisaValor" value="${item.valor || 0}" step="0.01" min="0"></div>
+        <div class="campo"><label>Forma de pagamento</label>
+            <select id="editCamisaPagamento">
+                <option value="pix" ${(item.pagamento||'pix')==='pix'?'selected':''}>💙 Pix</option>
+                <option value="dinheiro" ${item.pagamento==='dinheiro'?'selected':''}>💵 Dinheiro</option>
+                <option value="cartao" ${item.pagamento==='cartao'?'selected':''}>💳 Cartão</option>
+            </select>
+        </div>
         <div class="campo"><label>Data</label><input type="date" id="editCamisaData" value="${item.data || ''}"></div>
         <div class="campo"><label>Observação</label><input type="text" id="editCamisaObs" value="${item.obs || ''}"></div>
     `;
@@ -4522,6 +4534,7 @@ salvarEdicao = function() {
             nome: document.getElementById('editCamisaNome').value.trim(),
             tipo: document.getElementById('editCamisaTipo').value,
             valor: valorDigitado === '' ? 0 : parseFloat(valorDigitado),
+            pagamento: document.getElementById('editCamisaPagamento').value,
             data: document.getElementById('editCamisaData').value,
             obs: document.getElementById('editCamisaObs').value.trim(),
             pago: true
@@ -4561,15 +4574,18 @@ function renderizarCamisetas() {
     const tbody = document.querySelector('#tabelaCamisetas tbody');
     if (tbody) {
         const TIPO_LABEL = { trabalhador: '👷 Trabalhador', publico: '👥 Público' };
+        const PGTO_LABEL = { pix: '💙 Pix', dinheiro: '💵 Din.', cartao: '💳 Crt.' };
         tbody.innerHTML = lista.map(c => {
             const qtd = qtdPorPagamento(c.valor || 0, c.tipo);
             const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+            const pgto = PGTO_LABEL[c.pagamento || 'pix'] || '💙 Pix';
             return `<tr>
                 <td>${dataFmt}</td>
                 <td style="font-weight:700">${c.nome || '-'}</td>
                 <td><span class="badge-categoria">${TIPO_LABEL[c.tipo] || c.tipo}</span></td>
                 <td style="text-align:center;font-weight:700">${qtd}</td>
                 <td>${c.valor > 0 ? 'R$ ' + fmt(c.valor) : '-'}</td>
+                <td style="font-size:0.82rem">${pgto}</td>
                 <td style="opacity:0.7;font-size:0.82rem">${c.obs || '-'}</td>
                 <td style="white-space:nowrap">
                     <button class="btn-edit" onclick="editarCamiseta(${c.id})" title="Editar">✏️</button>
@@ -4680,11 +4696,12 @@ function exportarCamisetasCSV() {
     const lista = dados.camisetas || [];
     if (lista.length === 0) { alert('Nenhuma venda de camiseta registrada'); return; }
     const TIPO_LABEL = { trabalhador: 'Trabalhador', publico: 'Público' };
-    let csv = 'Data;Nome;Tipo;Qtd;Valor Pago;Obs\n';
+    let csv = 'Data;Nome;Tipo;Qtd;Valor Pago;Pagamento;Obs\n';
     [...lista].sort((a,b) => (b.data||'').localeCompare(a.data||'')).forEach(c => {
         const qtd = qtdPorPagamento(c.valor||0, c.tipo);
         const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
-        csv += `${dataFmt};${c.nome||''};${TIPO_LABEL[c.tipo]||c.tipo};${qtd};${c.valor > 0 ? fmt(c.valor) : ''};${c.obs||''}\n`;
+        const pgto = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão' }[c.pagamento||'pix'] || 'Pix';
+        csv += `${dataFmt};${c.nome||''};${TIPO_LABEL[c.tipo]||c.tipo};${qtd};${c.valor > 0 ? fmt(c.valor) : ''};${pgto};${c.obs||''}\n`;
     });
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');

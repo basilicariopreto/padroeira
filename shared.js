@@ -146,6 +146,7 @@ function normalizarDados(d) {
         if (!c.data) c.data = new Date().toISOString().split('T')[0];
         if (c.pago === undefined) c.pago = true;
         if (!c.valor) c.valor = 0;
+        if (!c.pagamento) c.pagamento = 'pix'; // migração: existentes eram todos pix
     });
     if (!d.configCamisetas) d.configCamisetas = { precoTrabalhador: 0, precoPublico: 0, custoTrabalhador: 0, custoPublico: 0, qtdTrabalhador: 0, qtdPublico: 0 };
     if (d.configCamisetas.qtdTrabalhador === undefined) d.configCamisetas.qtdTrabalhador = 0;

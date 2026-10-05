@@ -54,6 +54,11 @@
                 </div>
                 <div class="form-row">
                     <input type="number" id="camisaValorPago" placeholder="Valor pago R$" step="0.01" min="0" oninput="atualizarInfoQtdCamisa()" style="width:150px;flex:0 0 150px">
+                    <select id="camisaPagamento" style="flex:0 0 auto">
+                        <option value="pix">💙 Pix</option>
+                        <option value="dinheiro">💵 Dinheiro</option>
+                        <option value="cartao">💳 Cartão</option>
+                    </select>
                     <input type="date" id="camisaData" style="flex:0 0 auto">
                     <input type="text" id="camisaObs" placeholder="Observação (opcional)" style="flex:2">
                 </div>
@@ -73,7 +78,7 @@
 
             <div class="tabela-box">
                 <table id="tabelaCamisetas">
-                    <thead><tr><th>Data</th><th>Nome</th><th>Tipo</th><th>Qtd</th><th>Obs</th><th></th></tr></thead>
+                    <thead><tr><th>Data</th><th>Nome</th><th>Tipo</th><th>Qtd</th><th>Pgto</th><th>Obs</th><th></th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>

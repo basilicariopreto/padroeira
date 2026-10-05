@@ -79,6 +79,7 @@ function registrarCamiseta() {
         tipo,
         valor: valorPago,
         pago: true,
+        pagamento: document.getElementById('camisaPagamento') ? document.getElementById('camisaPagamento').value : 'pix',
         obs,
         data: data || new Date().toISOString().split('T')[0]
     });
@@ -88,6 +89,8 @@ function registrarCamiseta() {
     document.getElementById('camisaValorPago').value = '';
     document.getElementById('camisaObs').value = '';
     document.getElementById('camisaInfoQtd').textContent = '';
+    const pgto = document.getElementById('camisaPagamento');
+    if (pgto) pgto.value = 'pix';
     renderizarPagina();
     mostrarToast(`✅ ${qtd} camiseta${qtd>1?'s':''} de ${nome} registrada${qtd>1?'s':''}!`);
 }
@@ -113,6 +116,13 @@ function editarCamiseta(id) {
             </select>
         </div>
         <div class="campo"><label>Valor pago R$</label><input type="number" id="editValorCamisa" value="${item.valor || 0}" step="0.01" min="0"></div>
+        <div class="campo"><label>Forma de pagamento</label>
+            <select id="editPagamentoCamisa">
+                <option value="pix" ${(item.pagamento||'pix')==='pix'?'selected':''}>💙 Pix</option>
+                <option value="dinheiro" ${item.pagamento==='dinheiro'?'selected':''}>💵 Dinheiro</option>
+                <option value="cartao" ${item.pagamento==='cartao'?'selected':''}>💳 Cartão</option>
+            </select>
+        </div>
         <div class="campo"><label>Data</label><input type="date" id="editDataCamisa" value="${item.data || ''}"></div>
         <div class="campo"><label>Observação</label><input type="text" id="editObsCamisa" value="${item.obs || ''}"></div>
     `;
@@ -128,6 +138,7 @@ function salvarEdicaoCamiseta() {
         nome: document.getElementById('editNome').value.trim() || item.nome,
         tipo: document.getElementById('editTipoCamisa').value,
         valor: v === '' ? 0 : parseFloat(v),
+        pagamento: document.getElementById('editPagamentoCamisa').value,
         data: document.getElementById('editDataCamisa').value,
         obs: document.getElementById('editObsCamisa').value.trim(),
         pago: true
@@ -161,18 +172,21 @@ function renderizarPagina() {
     const tbody = document.querySelector('#tabelaCamisetas tbody');
     if (tbody) {
         const TIPO_LABEL = { trabalhador: '👷 Trabalhador', publico: '👥 Público' };
+        const PGTO_LABEL = { pix: '💙 Pix', dinheiro: '💵 Din.', cartao: '💳 Crt.' };
         tbody.innerHTML = lista.map(c => {
             const qtd = qtdPorPagamento(c.valor || 0, c.tipo);
             const dataFmt = c.data ? c.data.split('-').reverse().join('/') : '-';
+            const pgto = PGTO_LABEL[c.pagamento || 'pix'] || '💙 Pix';
             return `<tr>
                 <td>${dataFmt}</td>
                 <td style="font-weight:700">${c.nome || '-'}</td>
                 <td><span class="badge-categoria">${TIPO_LABEL[c.tipo] || c.tipo}</span></td>
                 <td style="text-align:center;font-weight:700">${qtd}</td>
+                <td style="font-size:0.82rem">${pgto}</td>
                 <td style="opacity:0.7;font-size:0.82rem">${c.obs || '-'}</td>
                 <td><button class="btn-edit" onclick="editarCamiseta(${c.id})" title="Editar">✏️</button></td>
             </tr>`;
-        }).join('') || '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:15px">Nenhum registro de venda</td></tr>';
+        }).join('') || '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:15px">Nenhum registro de venda</td></tr>';
     }
 
     // Resumo por tipo (sem valores financeiros — esta página é para quem vende)
