@@ -3,22 +3,23 @@
 
 const BARRACAS = [
     'fazendinha', 'cachorro-quente', 'kafta', 'pernil', 'pastel',
-    'batata-frita', 'doces', 'bar', 'chopp', 'kids', 'bingo', 'artesanato'
+    'batata-frita', 'frango', 'doces', 'bar', 'chopp', 'kids', 'bingo', 'artesanato'
 ];
 
 const NOMES_BARRACAS = {
-    'fazendinha': '🌽 Fazendinha',
+    'fazendinha':      '🌽 Fazendinha',
     'cachorro-quente': '🌭 Cachorro Quente',
-    'kafta': '🥙 Kafta',
-    'pernil': '🥪 Lanche de Pernil',
-    'pastel': '🥟 Pastel',
-    'batata-frita': '🍟 Batata Frita',
-    'doces': '🍬 Doces',
-    'bar': '🍺 Bar',
-    'chopp': '🍻 Chopp',
-    'kids': '🎠 Espaço Kids',
-    'bingo': '🎯 Bingo/Leilão',
-    'artesanato': '🎨 Artesanato'
+    'kafta':           '🥙 Kafta',
+    'pernil':          '🥪 Lanche de Pernil',
+    'pastel':          '🥟 Pastel',
+    'batata-frita':    '🍟 Batata Frita',
+    'frango':          '🍗 Frango/Mini Pizza',
+    'doces':           '🍬 Doces',
+    'bar':             '🍺 Bar',
+    'chopp':           '🍻 Chopp',
+    'kids':            '🎠 Espaço Kids',
+    'bingo':           '🎯 Bingo/Leilão',
+    'artesanato':      '🎨 Artesanato'
 };
 
 const DIAS_FESTA = {

@@ -1,22 +1,23 @@
 // ===== CONFIGURAÇÃO =====
 const BARRACAS = [
     'fazendinha', 'cachorro-quente', 'kafta', 'pernil', 'pastel',
-    'batata-frita', 'doces', 'bar', 'chopp', 'kids', 'bingo', 'artesanato'
+    'batata-frita', 'frango', 'doces', 'bar', 'chopp', 'kids', 'bingo', 'artesanato'
 ];
 
 const NOMES_BARRACAS = {
-    'fazendinha': '🌽 Fazendinha',
+    'fazendinha':      '🌽 Fazendinha',
     'cachorro-quente': '🌭 Cachorro Quente',
-    'kafta': '🥙 Kafta',
-    'pernil': '🥪 Lanche de Pernil',
-    'pastel': '🥟 Pastel',
-    'batata-frita': '🍟 Batata Frita',
-    'doces': '🍬 Doces',
-    'bar': '🍺 Bar',
-    'chopp': '🍻 Chopp',
-    'kids': '🎠 Espaço Kids',
-    'bingo': '🎯 Bingo/Leilão',
-    'artesanato': '🎨 Artesanato'
+    'kafta':           '🥙 Kafta',
+    'pernil':          '🥪 Lanche de Pernil',
+    'pastel':          '🥟 Pastel',
+    'batata-frita':    '🍟 Batata Frita',
+    'frango':          '🍗 Frango/Mini Pizza',
+    'doces':           '🍬 Doces',
+    'bar':             '🍺 Bar',
+    'chopp':           '🍻 Chopp',
+    'kids':            '🎠 Espaço Kids',
+    'bingo':           '🎯 Bingo/Leilão',
+    'artesanato':      '🎨 Artesanato'
 };
 
 const DIAS_FESTA = {
@@ -81,20 +82,21 @@ function mostrarToast(msg, tipo) {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3000);
 }
 
-// Produtos por barraca (para caixa rápido)
+// Produtos por barraca (para caixa rápido) — cardápio oficial 2026
 const PRODUTOS_BARRACA = {
-    'fazendinha': [{nome:'Chocolate Quente',preco:15},{nome:'Curau',preco:15},{nome:'Milho Cozido',preco:10},{nome:'Pamonha',preco:20},{nome:'Pipoca',preco:5},{nome:'Quentão',preco:12},{nome:'Vinho Quente',preco:17}],
-    'cachorro-quente': [{nome:'Cachorro Quente',preco:17}],
-    'kafta': [{nome:'Kafta',preco:17}],
-    'pernil': [{nome:'Lanche de Pernil',preco:20}],
-    'pastel': [{nome:'Pastel',preco:15}],
-    'batata-frita': [{nome:'Batata Frita',preco:15}],
-    'doces': [{nome:'Doce 250g',preco:25},{nome:'Doce 500g',preco:35},{nome:'Doces Variados',preco:15},{nome:'Geleia',preco:30},{nome:'Morango no Espeto',preco:25},{nome:'Pudim de Pote',preco:20}],
-    'bar': [{nome:'Água',preco:5},{nome:'Cerveja',preco:10},{nome:'Refrigerante',preco:8},{nome:'Suco',preco:7}],
-    'chopp': [{nome:'Chopp Ashby Pilsen',preco:10},{nome:'Chopp de Vinho',preco:14},{nome:'Chopp Heineken',preco:14},{nome:'Chopp IPA Session',preco:14}],
-    'kids': [{nome:'Espaço Kids',preco:20}],
-    'bingo': [{nome:'Bingo Cartela Especial',preco:20},{nome:'Bingo Cartela Simples',preco:10}],
-    'artesanato': []
+    'fazendinha':      [{nome:'Curau',preco:15},{nome:'Milho Cozido',preco:10},{nome:'Pamonha',preco:20},{nome:'Pipoca',preco:5}],
+    'cachorro-quente': [{nome:'Cachorro Quente',preco:20}],
+    'kafta':           [{nome:'Kafta',preco:17},{nome:'Kafta com Queijo',preco:20}],
+    'pernil':          [{nome:'Lanche de Pernil',preco:25}],
+    'pastel':          [{nome:'Pastel',preco:17}],
+    'batata-frita':    [{nome:'Batata Frita',preco:17}],
+    'frango':          [{nome:'Frango Assado',preco:60},{nome:'Mini Pizza',preco:15}],
+    'doces':           [{nome:'Banoff',preco:15},{nome:'Bolo de Pote',preco:15},{nome:'Cestinha de Morango',preco:35},{nome:'Cocada',preco:15},{nome:'Merengue de Morango',preco:15},{nome:'Morango Cravejado no Pote',preco:22},{nome:'Mousse de Maracujá',preco:15},{nome:'Pudim de Pote',preco:20},{nome:'Surpresa de Uva',preco:18},{nome:'Uva Cravejada no Pote',preco:22}],
+    'bar':             [{nome:'Água',preco:5},{nome:'Cerveja',preco:10},{nome:'Cerveja Heineken S/Álcool',preco:10},{nome:'Refrigerante',preco:8},{nome:'Suco',preco:7}],
+    'chopp':           [{nome:'Chopp Ashby Pilsen',preco:10},{nome:'Chopp de Vinho',preco:14},{nome:'Chopp Heineken',preco:14},{nome:'Chopp IPA Session',preco:14}],
+    'kids':            [{nome:'Espaço Kids',preco:20}],
+    'bingo':           [{nome:'Bingo Cartela Especial',preco:20},{nome:'Bingo Cartela Simples',preco:10}],
+    'artesanato':      []
 };
 
 // ===== STORAGE (Firebase + localStorage como fallback) =====
@@ -2545,6 +2547,36 @@ function removerBarraca(id) {
     registrarAcao(`Barraca removida: ${id}`);
 }
 
+// Aplica o cardápio padrão (hardcoded) ao configProdutos do Firebase
+// ATENÇÃO: só atualiza produtos, NÃO apaga vendas nem outros dados
+function resetarProdutosParaPadrao() {
+    if (!confirm('Isso vai sobrescrever os produtos e preços de TODAS as barracas com o cardápio oficial 2026.\n\nVendas já lançadas NÃO serão afetadas. Confirma?')) return;
+    // Garante que configBarracas inclui a barraca frango
+    const barracasPadrao = Object.keys(PRODUTOS_BARRACA);
+    if (!dados.configBarracas) {
+        dados.configBarracas = BARRACAS.map(b => ({ id: b, nome: NOMES_BARRACAS[b] || b }));
+    }
+    // Adicionar frango se não existir
+    if (!dados.configBarracas.find(b => b.id === 'frango')) {
+        dados.configBarracas.push({ id: 'frango', nome: '🍗 Frango/Mini Pizza' });
+    }
+    if (!dados['frango']) dados['frango'] = { vendas: [] };
+    if (!BARRACAS.includes('frango')) BARRACAS.push('frango');
+    NOMES_BARRACAS['frango'] = '🍗 Frango/Mini Pizza';
+    // Copiar produtos padrão para configProdutos
+    dados.configProdutos = JSON.parse(JSON.stringify(PRODUTOS_BARRACA));
+    barracasPadrao.forEach(b => {
+        PRODUTOS_BARRACA[b] = dados.configProdutos[b];
+        if (!dados[b]) dados[b] = { vendas: [] };
+    });
+    salvarDados(dados);
+    carregarConfigDinamica();
+    renderizarConfig();
+    renderizarTudo();
+    mostrarToast('✅ Produtos atualizados para o cardápio oficial 2026!');
+    registrarAcao('Produtos resetados para o cardápio padrão 2026');
+}
+
 function atualizarSelectsDestino() {
     // Atualiza todos os selects de destino (despesas, caixa rápido, patrocínios)
     const selects = ['destinoDespesa', 'caixaDestino', 'barracaPatrocinio'];
@@ -4631,6 +4663,16 @@ function renderizarCamisetas() {
     const custoTotalGeral = custoPorTipoCamisa('trabalhador') + custoPorTipoCamisa('publico');
     const saldoGeral = totalGeral - custoTotalGeral;
 
+    // Ponto de equilíbrio geral: soma das peças necessárias de cada tipo para cobrir seus lotes
+    const peqbTrab = pontosEquilibrio('trabalhador');
+    const peqbPub = pontosEquilibrio('publico');
+    const peqbGeral = (peqbTrab !== null || peqbPub !== null) ? (peqbTrab || 0) + (peqbPub || 0) : null;
+    const qtdVendTrab = todas.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
+    const qtdVendPub = todas.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
+    const faltaGeralTrab = peqbTrab !== null ? Math.max(0, peqbTrab - qtdVendTrab) : 0;
+    const faltaGeralPub = peqbPub !== null ? Math.max(0, peqbPub - qtdVendPub) : 0;
+    const faltaGeral = faltaGeralTrab + faltaGeralPub;
+
     const resumoEl = document.getElementById('resumoCamisetas');
     if (resumoEl) {
         resumoEl.innerHTML = `
@@ -4643,6 +4685,22 @@ function renderizarCamisetas() {
                 <div class="item positivo"><span>Total recebido</span><strong>${R$(totalGeral)}</strong></div>
                 ${custoTotalGeral > 0 ? `<div class="item negativo"><span>Custo total (lotes)</span><strong>${R$(custoTotalGeral)}</strong></div>` : ''}
                 ${custoTotalGeral > 0 ? `<div class="item ${saldoGeral>=0?'positivo':'negativo'}"><span>Saldo geral</span><strong style="color:${saldoGeral>=0?'#81c784':'#ef5350'}">${R$(saldoGeral)}</strong></div>` : ''}
+                ${peqbGeral !== null ? `<div class="item ${faltaGeral===0?'positivo':'neutro'}" style="border:1px solid rgba(91,192,235,0.4);border-radius:8px;padding:8px 14px">
+                    <span>${faltaGeral===0?'✅ Equilíbrio geral':'⚖️ P. equilíbrio geral'}</span>
+                    <strong>${faltaGeral===0 ? 'Atingido!' : faltaGeral + ' un. ainda necessárias'}</strong>
+                    ${faltaGeral>0 ? `<div style="font-size:0.75rem;opacity:0.7;margin-top:2px">${faltaGeralTrab>0?faltaGeralTrab+' trabalhador':''}${faltaGeralTrab>0&&faltaGeralPub>0?' + ':''}${faltaGeralPub>0?faltaGeralPub+' público':''}</div>` : ''}
+                </div>` : ''}
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">
+                <span style="font-size:0.8rem;opacity:0.7;align-self:center">Por forma de pagamento:</span>
+                ${['pix','dinheiro','cartao'].map(pgto => {
+                    const label = {pix:'💙 Pix', dinheiro:'💵 Dinheiro', cartao:'💳 Cartão'}[pgto];
+                    const vendas = todas.filter(c => (c.pagamento||'pix') === pgto);
+                    const tot = vendas.reduce((s,c) => s+(c.valor||0), 0);
+                    const qtd = ['trabalhador','publico'].reduce((s,t) => s + vendas.filter(c=>c.tipo===t).reduce((ss,c)=>ss+qtdPorPagamento(c.valor||0,t),0), 0);
+                    if (tot === 0) return '';
+                    return `<div class="item neutro"><span>${label}</span><strong>${R$(tot)}</strong><div style="font-size:0.75rem;opacity:0.7">${qtd} un.</div></div>`;
+                }).join('')}
             </div>`;
     }
 }
