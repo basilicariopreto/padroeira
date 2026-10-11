@@ -4663,15 +4663,15 @@ function renderizarCamisetas() {
     const custoTotalGeral = custoPorTipoCamisa('trabalhador') + custoPorTipoCamisa('publico');
     const saldoGeral = totalGeral - custoTotalGeral;
 
-    // Ponto de equilíbrio geral: soma das peças necessárias de cada tipo para cobrir seus lotes
-    const peqbTrab = pontosEquilibrio('trabalhador');
-    const peqbPub = pontosEquilibrio('publico');
-    const peqbGeral = (peqbTrab !== null || peqbPub !== null) ? (peqbTrab || 0) + (peqbPub || 0) : null;
-    const qtdVendTrab = todas.filter(c=>c.tipo==='trabalhador').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'trabalhador'),0);
-    const qtdVendPub = todas.filter(c=>c.tipo==='publico').reduce((s,c)=>s+qtdPorPagamento(c.valor||0,'publico'),0);
-    const faltaGeralTrab = peqbTrab !== null ? Math.max(0, peqbTrab - qtdVendTrab) : 0;
-    const faltaGeralPub = peqbPub !== null ? Math.max(0, peqbPub - qtdVendPub) : 0;
-    const faltaGeral = faltaGeralTrab + faltaGeralPub;
+    // Ponto de equilíbrio geral: déficit em VALOR (saldo geral negativo).
+    // O saldo positivo de um tipo compensa o déficit do outro — por isso usamos o saldo geral.
+    const temCusto = custoTotalGeral > 0;
+    const deficitGeral = saldoGeral < 0 ? -saldoGeral : 0; // quanto ainda falta receber (R$)
+    const precoTrab = precoPorTipoCamisa('trabalhador');
+    const precoPub = precoPorTipoCamisa('publico');
+    // Converte o déficit em quantas camisetas de cada tipo cobririam
+    const faltaEmTrab = (deficitGeral > 0 && precoTrab > 0) ? Math.ceil(deficitGeral / precoTrab) : null;
+    const faltaEmPub = (deficitGeral > 0 && precoPub > 0) ? Math.ceil(deficitGeral / precoPub) : null;
 
     const resumoEl = document.getElementById('resumoCamisetas');
     if (resumoEl) {
@@ -4685,24 +4685,43 @@ function renderizarCamisetas() {
                 <div class="item positivo"><span>Total recebido</span><strong>${R$(totalGeral)}</strong></div>
                 ${custoTotalGeral > 0 ? `<div class="item negativo"><span>Custo total (lotes)</span><strong>${R$(custoTotalGeral)}</strong></div>` : ''}
                 ${custoTotalGeral > 0 ? `<div class="item ${saldoGeral>=0?'positivo':'negativo'}"><span>Saldo geral</span><strong style="color:${saldoGeral>=0?'#81c784':'#ef5350'}">${R$(saldoGeral)}</strong></div>` : ''}
-                ${peqbGeral !== null ? `<div class="item ${faltaGeral===0?'positivo':'neutro'}" style="border:1px solid rgba(91,192,235,0.4);border-radius:8px;padding:8px 14px">
-                    <span>${faltaGeral===0?'✅ Equilíbrio geral':'⚖️ P. equilíbrio geral'}</span>
-                    <strong>${faltaGeral===0 ? 'Atingido!' : faltaGeral + ' un. ainda necessárias'}</strong>
-                    ${faltaGeral>0 ? `<div style="font-size:0.75rem;opacity:0.7;margin-top:2px">${faltaGeralTrab>0?faltaGeralTrab+' trabalhador':''}${faltaGeralTrab>0&&faltaGeralPub>0?' + ':''}${faltaGeralPub>0?faltaGeralPub+' público':''}</div>` : ''}
+                ${temCusto ? `<div class="item ${deficitGeral===0?'positivo':'neutro'}" style="border:1px solid rgba(91,192,235,0.4);border-radius:8px;padding:8px 14px">
+                    <span>${deficitGeral===0?'✅ Equilíbrio geral':'⚖️ P. equilíbrio geral'}</span>
+                    <strong>${deficitGeral===0 ? 'Atingido!' : 'Falta receber ' + R$(deficitGeral)}</strong>
+                    ${deficitGeral>0 ? `<div style="font-size:0.75rem;opacity:0.7;margin-top:2px">${faltaEmTrab!==null?'≈ '+faltaEmTrab+' trabalhador':''}${faltaEmTrab!==null&&faltaEmPub!==null?' ou ':''}${faltaEmPub!==null?faltaEmPub+' público':''}</div>` : ''}
                 </div>` : ''}
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">
-                <span style="font-size:0.8rem;opacity:0.7;align-self:center">Por forma de pagamento:</span>
-                ${['pix','dinheiro','cartao'].map(pgto => {
-                    const label = {pix:'💙 Pix', dinheiro:'💵 Dinheiro', cartao:'💳 Cartão'}[pgto];
-                    const vendas = todas.filter(c => (c.pagamento||'pix') === pgto);
-                    const tot = vendas.reduce((s,c) => s+(c.valor||0), 0);
-                    const qtd = ['trabalhador','publico'].reduce((s,t) => s + vendas.filter(c=>c.tipo===t).reduce((ss,c)=>ss+qtdPorPagamento(c.valor||0,t),0), 0);
-                    if (tot === 0) return '';
-                    return `<div class="item neutro"><span>${label}</span><strong>${R$(tot)}</strong><div style="font-size:0.75rem;opacity:0.7">${qtd} un.</div></div>`;
-                }).join('')}
-            </div>`;
+            ${blocoPagamentoPorTipo(todas)}`;
     }
+}
+
+// Bloco de totais por forma de pagamento, SEPARADO por tipo (contas bancárias distintas)
+function blocoPagamentoPorTipo(todas) {
+    const PGTOS = [
+        { key: 'pix', label: '💙 Pix' },
+        { key: 'dinheiro', label: '💵 Dinheiro' },
+        { key: 'cartao', label: '💳 Cartão' }
+    ];
+    const bloco = (tipo, labelTipo) => {
+        const vendasTipo = todas.filter(c => c.tipo === tipo);
+        if (vendasTipo.length === 0) return '';
+        const cards = PGTOS.map(p => {
+            const v = vendasTipo.filter(c => (c.pagamento || 'pix') === p.key);
+            const tot = v.reduce((s, c) => s + (c.valor || 0), 0);
+            const qtd = v.reduce((s, c) => s + qtdPorPagamento(c.valor || 0, tipo), 0);
+            if (tot === 0) return '';
+            return `<div class="item neutro"><span>${p.label}</span><strong>${R$(tot)}</strong><div style="font-size:0.75rem;opacity:0.7">${qtd} un.</div></div>`;
+        }).filter(Boolean).join('');
+        if (!cards) return '';
+        return `<div style="flex:1;min-width:260px">
+            <div style="font-size:0.82rem;font-weight:700;color:var(--cor-amarelo);margin-bottom:4px">${labelTipo} — por pagamento</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>
+        </div>`;
+    };
+    const trab = bloco('trabalhador', '👷 Trabalhador');
+    const pub = bloco('publico', '👥 Público');
+    if (!trab && !pub) return '';
+    return `<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1)">${trab}${pub}</div>`;
 }
 
 function exportarCamisetasPDF() {
